@@ -13,7 +13,9 @@
 #include "capi_uart.h"
 #include "xilinx_capi_gpio.h"
 #include "xilinx_capi_spi.h"
+#include "xilinx_capi_timer.h"
 #include "xilinx_capi_irq.h"
+#include "capi_timer.h"
 #include "xinterrupt_wrap.h"
 
 extern struct capi_uart_ops capi_uart_xilinx_ps_ops;
@@ -231,5 +233,151 @@ extern struct capi_uart_ops capi_uart_xilinx_ps_ops;
 #else
 #define SPI_DEVICE_SPEED_HZ	1000000U
 #endif
+
+/*
+ * Timer selection. Xilinx exposes three timer flavours and the test drives one
+ * at a time (a build maps a single TIMER_OPS). Which one is chosen two ways:
+ *
+ *   1. Override: define TIMER_SELECT (e.g. -DTIMER_SELECT=TIMER_SEL_AXI) to
+ *      force a specific timer, provided its instances exist in the BSP.
+ *   2. Auto: with no override, pick the first flavour present in the BSP,
+ *      preferring the PS TTC — it is the validated path on this board (its
+ *      overflow interrupt is a level-high GIC SPI, the same delivery route as
+ *      the PS SPI/UART; the AXI timer's fabric IRQ_F2P never reached the GIC).
+ *
+ * Each selected block below emits the full mapping (TIMER_OPS, identifier,
+ * clock, IRQ) plus the capability flags and counter shape test_timer.c reads,
+ * so the type-agnostic test exercises exactly the paths that timer supports.
+ */
+#define TIMER_SEL_TTC	1
+#define TIMER_SEL_AXI	2
+#define TIMER_SEL_SCU	3
+
+#ifndef TIMER_SELECT
+#if defined(XPAR_XTTCPS_NUM_INSTANCES)
+#define TIMER_SELECT	TIMER_SEL_TTC
+#elif defined(XPAR_TMRCTR_NUM_INSTANCES) || defined(XPAR_AXI_TIMER_NUM_INSTANCES)
+#define TIMER_SELECT	TIMER_SEL_AXI
+#elif defined(XPAR_XSCUTIMER_NUM_INSTANCES) || defined(XPAR_SCUTIMER_NUM_INSTANCES)
+#define TIMER_SELECT	TIMER_SEL_SCU
+#else
+#error "No supported Xilinx timer (TTC/AXI/SCU) in the BSP; set TIMER_SELECT"
+#endif
+#endif /* TIMER_SELECT */
+
+#if TIMER_SELECT == TIMER_SEL_TTC
+/*
+ * PS TTC (XTtcPs, triple timer counter) — 1 channel per instance,
+ * capi_timer_xilinx_ps_ttc_ops. Overflow IRQ and output-compare match
+ * registers, but no input capture. The Zynq-7000 (ARMA9) TTC counter is 16-bit
+ * (XTTCPS_MAX_INTERVAL_COUNT == 0xFFFF); the driver's default /2 prescaler on
+ * the ~111 MHz source rolls a 16-bit span over in ~1.2 ms, well inside the 1 s
+ * IRQ timeout.
+ */
+#define TIMER_IDENTIFIER	XPAR_XTTCPS_0_BASEADDR
+#define TIMER_OPS		&capi_timer_xilinx_ps_ttc_ops
+#define TIMER_INPUT_CLK_HZ	XPAR_XTTCPS_0_CLOCK_FREQ
+#define TIMER_OUTPUT_FREQ_HZ	0U	/* TTC free-runs, no target frequency */
+#define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
+#define TIMER_IRQ_ID		(XGet_IntrId(XPAR_XTTCPS_0_INTERRUPTS) + \
+				 XGet_IntrOffset(XPAR_XTTCPS_0_INTERRUPTS))
+#define TIMER_EXTRA_INIT	{ .use_irq = true, \
+				  .irq_id = CAPI_IRQ_XILINX_GIC(TIMER_IRQ_ID) }
+
+#define TIMER_HAS_IRQ		1
+#define TIMER_HAS_COMPARE	1
+
+#define TIMER_DIRECTION		CAPI_TIMER_COUNT_UP
+#define TIMER_COUNTER_MAX	0x0000FFFFU	/* 16-bit TTC, ~1.2 ms rollover */
+#define TIMER_COUNTER_WIDTH	16U
+#define TIMER_COMPARE_VALUE	0x00001000U
+
+#define TIMER_RATE_WINDOW_US	100U
+#define TIMER_RATE_COUNTER_MASK	0x0000FFFFU
+#define TIMER_RATE_TOLERANCE_PCT 10U
+
+/*
+ * IRQ-count case: interrupt every TIMER_IRQ_PERIOD_US and count exactly
+ * TIMER_IRQ_EXPECTED_COUNT over PERIOD_US*COUNT of run time. 1 ms (not 10 ms):
+ * the 16-bit TTC at ~55 MHz holds only ~1.18 ms per interval, so 1 ms x 200 =>
+ * 200 interrupts over 200 ms is the widest period this counter can carry.
+ */
+#define TIMER_IRQ_PERIOD_US	1000U
+#define TIMER_IRQ_EXPECTED_COUNT 200U
+
+#elif TIMER_SELECT == TIMER_SEL_AXI
+/*
+ * AXI Timer (XTmrCtr, PL fabric) — capi_timer_xilinx_pl_ops, 32-bit counter
+ * with output-compare and input-capture channels. The fabric IRQ (IRQ_F2P) may
+ * not be wired to the GIC on every board, so the overflow-IRQ case is gated off
+ * by default here; enable TIMER_HAS_IRQ once the fabric line is routed.
+ */
+#define TIMER_IDENTIFIER	XPAR_TMRCTR_0_BASEADDR
+#define TIMER_OPS		&capi_timer_xilinx_pl_ops
+#define TIMER_INPUT_CLK_HZ	XPAR_TMRCTR_0_CLOCK_FREQ
+#define TIMER_OUTPUT_FREQ_HZ	1000U
+#define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
+#define TIMER_EXTRA_INIT	{ .use_irq = false }
+
+#define TIMER_HAS_IRQ		0
+#define TIMER_HAS_CAPTURE	1
+#define TIMER_HAS_COMPARE	1
+
+#define TIMER_DIRECTION		CAPI_TIMER_COUNT_UP
+#define TIMER_COUNTER_MAX	0xFFFFFFFFU	/* 32-bit AXI counter */
+#define TIMER_COUNTER_WIDTH	32U
+#define TIMER_COMPARE_VALUE	0x00010000U
+
+#define TIMER_RATE_WINDOW_US	100U
+#define TIMER_RATE_COUNTER_MASK	0xFFFFFFFFU
+#define TIMER_RATE_TOLERANCE_PCT 10U
+
+/*
+ * IRQ-count case sizing (compiled even though TIMER_HAS_IRQ gates the subtest
+ * off here). The 32-bit AXI counter can hold the full 10 ms period, so this
+ * matches the literal "every 10 ms, 20 interrupts over 200 ms" once the fabric
+ * IRQ is routed and TIMER_HAS_IRQ is set.
+ */
+#define TIMER_IRQ_PERIOD_US	10000U
+#define TIMER_IRQ_EXPECTED_COUNT 20U
+
+#elif TIMER_SELECT == TIMER_SEL_SCU
+/*
+ * PS SCU private timer (XScuTimer) — capi_timer_xilinx_ps_scu_ops, a 32-bit
+ * down-counter with auto-reload and an overflow IRQ. It supports compare mode
+ * but has no input capture. Runs at half the CPU (3x3) clock behind the GIC.
+ */
+#define TIMER_IDENTIFIER	XPAR_XSCUTIMER_0_BASEADDR
+#define TIMER_OPS		&capi_timer_xilinx_ps_scu_ops
+#define TIMER_INPUT_CLK_HZ	XPAR_XSCUTIMER_0_CLOCK_FREQ
+#define TIMER_OUTPUT_FREQ_HZ	1000U
+#define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
+#define TIMER_IRQ_ID		CAPI_IRQ_XILINX_GIC(XPS_SCU_TMR_INT_ID)
+#define TIMER_EXTRA_INIT	{ .use_irq = true, \
+				  .irq_id = TIMER_IRQ_ID }
+
+#define TIMER_HAS_IRQ		1
+#define TIMER_HAS_COMPARE	1
+
+#define TIMER_DIRECTION		CAPI_TIMER_COUNT_DOWN
+#define TIMER_COUNTER_MAX	0xFFFFFFFFU	/* 32-bit SCU down-counter */
+#define TIMER_COUNTER_WIDTH	32U
+#define TIMER_COMPARE_VALUE	0x00010000U
+
+#define TIMER_RATE_WINDOW_US	100U
+#define TIMER_RATE_COUNTER_MASK	0xFFFFFFFFU
+#define TIMER_RATE_TOLERANCE_PCT 10U
+
+/*
+ * IRQ-count case: the 32-bit SCU down-counter easily holds a 10 ms period, so
+ * this is the literal "every 10 ms, 20 interrupts over 200 ms" — each period the
+ * counter reloads and reaches zero once, firing one expiry interrupt.
+ */
+#define TIMER_IRQ_PERIOD_US	10000U
+#define TIMER_IRQ_EXPECTED_COUNT 20U
+
+#else
+#error "TIMER_SELECT must be TIMER_SEL_TTC, TIMER_SEL_AXI or TIMER_SEL_SCU"
+#endif /* TIMER_SELECT */
 
 #endif /* __PARAMETERS_H__ */
