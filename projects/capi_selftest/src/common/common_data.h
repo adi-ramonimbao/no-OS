@@ -185,6 +185,68 @@ extern struct capi_irq_config irq_config;
 extern const struct capi_timer_config timer_config;
 #endif /* TIMER_OPS */
 
+#ifdef I2C_OPS
+#include "capi_i2c.h"
+
+/*
+ * Test-only I2C constants. Defaults let the tests build before I2C is mapped;
+ * a platform overrides any of them in parameters.h if its bus needs different
+ * values (e.g. a taken address, or an extra config the speed switch requires).
+ */
+
+/* Second address the target listens on for the readdress case. */
+#ifndef I2C_TARGET_ALT_ADDR
+#define I2C_TARGET_ALT_ADDR	0x55U
+#endif /* I2C_TARGET_ALT_ADDR */
+
+/* Alternate bus speed the bus-speed case switches to and proves still works. */
+#ifndef I2C_SPEED_ALT
+#define I2C_SPEED_ALT		CAPI_I2C_SPEED_FAST
+#endif /* I2C_SPEED_ALT */
+
+/* SCLK duty cycle (percent) passed to configure_bus_speed in the speed case. */
+#ifndef I2C_DUTY_CYCLE
+#define I2C_DUTY_CYCLE		50U
+#endif /* I2C_DUTY_CYCLE */
+
+/*
+ * The single-board loopback proves completion through the async callback, so
+ * the side running async needs a live interrupt. Which side that is differs by
+ * case: the target always listens async (its callback is the completion signal
+ * every case waits on), while the master is polled in the sync cases and async
+ * only in the dedicated master-async case. A board whose I2C controller has no
+ * IRQ path clears the matching flag in parameters.h so those cases skip rather
+ * than fail -ENOTSUP. Default is a fully IRQ-capable controller on both sides.
+ */
+#ifndef I2C_TARGET_USE_IRQ
+#define I2C_TARGET_USE_IRQ	1
+#endif /* I2C_TARGET_USE_IRQ */
+
+#ifndef I2C_MASTER_USE_IRQ
+#define I2C_MASTER_USE_IRQ	1
+#endif /* I2C_MASTER_USE_IRQ */
+
+/**
+ * @brief CAPI I2C initiator configuration for the loopback tests.
+ */
+extern const struct capi_i2c_config i2c_master_config;
+/**
+ * @brief CAPI I2C device descriptor used by the initiator to address the target.
+ */
+extern struct capi_i2c_device i2c_dev;
+#endif /* I2C_OPS */
+
+#ifdef I2C_TARGET_OPS
+/**
+ * @brief CAPI I2C target configuration for the loopback tests.
+ */
+extern const struct capi_i2c_config i2c_target_config;
+/**
+ * @brief CAPI I2C device descriptor for the target side.
+ */
+extern struct capi_i2c_device i2c_target_dev;
+#endif /* I2C_TARGET_OPS */
+
 /**
  * @brief Fill a test framework configuration for the selected platform.
  * @param config - Destination framework configuration.
