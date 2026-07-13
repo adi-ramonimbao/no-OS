@@ -20,24 +20,22 @@
 #include "capi_timer.h"
 #include "xinterrupt_wrap.h"
 
-/*
- * ======================= BACKEND SELECTOR PANEL =======================
- * One place to force which hardware backend each peripheral role maps to.
- * Uncomment a line to pin that role; leave it commented to auto-detect the
- * form present in the BSP (the per-peripheral blocks further down do the
- * auto-detect when no override is defined here). The comment after each knob
- * lists the accepted values.
- *
- * These must be defined BEFORE the per-peripheral selection blocks below,
- * which is why the panel sits at the very top of the file.
- */
-/* #define GPIO_SEL_PS */		/* GPIO_SEL_PS / GPIO_SEL_PL */
-/* #define IRQ_SEL_GIC */		/* IRQ_SEL_GIC / IRQ_SEL_CASCADE */
-#define SPI_SEL_PS			/* SPI_SEL_PS / SPI_SEL_PL */
-/* #define TIMER_SELECT 1 */		/* 1=TTC / 2=AXI / 3=SCU (TIMER_SEL_*) */
-/* #define I2C_SEL_PL	*/		/* I2C_SEL_PS / I2C_SEL_PL (initiator) */
-/* #define I2C_TARGET_SEL_PS */		/* I2C_TARGET_SEL_PS / I2C_TARGET_SEL_PL */
-/* ====================================================================== */
+/* Cora Z7 basic configuration. */
+#define GPIO_SEL_PS
+#define IRQ_SEL_GIC
+#define SPI_SEL_PL
+#define TIMER_SELECT		TIMER_SEL_TTC
+#define I2C_SEL_PL
+#define I2C_TARGET_SEL_PS
+
+/* Alternative selections. */
+/* #define GPIO_SEL_PL */
+/* #define IRQ_SEL_CASCADE */
+/* #define SPI_SEL_PS */
+/* #define TIMER_SELECT TIMER_SEL_AXI */
+/* #define TIMER_SELECT TIMER_SEL_SCU */
+/* #define I2C_SEL_PS */
+/* #define I2C_TARGET_SEL_PL */
 
 #define UART_IDENTIFIER		XPAR_XUARTPS_0_BASEADDR
 
@@ -173,14 +171,8 @@
  * the IRQ test and every IRQ-backed async path compile out. */
 #endif
 
-/*
- * SPI async delivery mode selection.
- *
- * SPI_HAS_IRQ is derived after the backend block below, from whether the BSP
- * actually describes an interrupt for the SELECTED controller -- it cannot be
- * pinned here because which controller that is has not been decided yet.
- * SPI_HAS_DMA stays a manual switch (no BSP evidence distinguishes it).
- */
+/* SPI async delivery mode selection (pinned with GIC/INTC/none build axis). */
+#define SPI_HAS_IRQ  1   /* async via interrupt available */
 #define SPI_HAS_DMA  0   /* async via DMA available */
 
 /*
@@ -196,8 +188,7 @@
  *     from XPAR_XSPI_0_INTERRUPT_PARENT low bit (1 = INTC).
  *
  * PS is preferred when XSpiPs exists in the BSP; otherwise fall back to the PL
- * AXI SPI. Define SPI_SEL_PL / SPI_SEL_PS before this point to force one
- * (see the BACKEND SELECTOR PANEL at the top of this file).
+ * AXI SPI. Define SPI_SEL_PL / SPI_SEL_PS before this point to force one.
  */
 #if !defined(SPI_SEL_PS) && !defined(SPI_SEL_PL)
 #if defined(XPAR_XSPIPS_NUM_INSTANCES) || defined(XPAR_XSPIPS_0_BASEADDR)
@@ -212,30 +203,16 @@
 #define SPI_IDENTIFIER		XPAR_XSPIPS_0_BASEADDR
 #define SPI_OPS			&capi_spi_xilinx_ps_ops
 #define SPI_EXTRA_TYPE		struct capi_spi_xilinx_config
-#if defined(XPAR_XSPIPS_0_INTERRUPTS)
 #define SPI_IRQ_ID		(XGet_IntrId(XPAR_XSPIPS_0_INTERRUPTS) + \
 				 XGet_IntrOffset(XPAR_XSPIPS_0_INTERRUPTS))
 #define SPI_EXTRA_INIT		{ .use_irq = true, \
 				  .irq_id = CAPI_IRQ_XILINX_GIC(SPI_IRQ_ID) }
-#else
-/* No interrupt entry in the BSP (polled build): sync transfers only. */
-#define SPI_EXTRA_INIT		{ .use_irq = false }
-#endif /* XPAR_XSPIPS_0_INTERRUPTS */
 
 #elif defined(SPI_SEL_PL)
 
 #define SPI_IDENTIFIER		XPAR_XSPI_0_BASEADDR
 #define SPI_OPS			&capi_spi_xilinx_pl_ops
 #define SPI_EXTRA_TYPE		struct capi_spi_xilinx_config
-/*
- * An XSA built without fabric interrupts emits no XPAR_XSPI_0_INTERRUPTS at
- * all, so the presence of that macro -- not its value -- is what decides
- * whether an IRQ exists. Testing XPAR_XSPI_0_INTERRUPT_PARENT directly would
- * silently evaluate an undefined identifier as 0 and then reference the
- * equally-undefined XPAR_XSPI_0_INTERRUPTS in the #else branch. Mirrors the
- * I2C PL block below.
- */
-#if defined(XPAR_XSPI_0_INTERRUPTS)
 #if (XPAR_XSPI_0_INTERRUPT_PARENT & 0x1U)
 /* Fabric line is an AXI INTC input (raw local number). */
 #define SPI_IRQ_ID		XPAR_FABRIC_XSPI_0_INTR
@@ -248,25 +225,8 @@
 #define SPI_EXTRA_INIT		{ .use_irq = true, \
 				  .irq_id = CAPI_IRQ_XILINX_GIC(SPI_IRQ_ID) }
 #endif
-#else
-/* No fabric interrupt wired (polled build): sync transfers only. */
-#define SPI_EXTRA_INIT		{ .use_irq = false }
-#endif /* XPAR_XSPI_0_INTERRUPTS */
 
 #endif /* SPI_SEL_* */
-
-/*
- * Async-via-interrupt availability, derived from the selected backend rather
- * than pinned by hand: on an XSA with no fabric interrupt the branches above
- * fall back to .use_irq = false, and the async cases must SKIP rather than run
- * and fail -ENOTSUP. Keyed on SPI_IRQ_ID, which only those branches define.
- */
-#if defined(SPI_IRQ_ID)
-#define SPI_HAS_IRQ  1
-#else
-#define SPI_HAS_IRQ  0
-#endif
-
 /*
  * clk_freq_hz is the controller REFERENCE clock, not the requested SCLK. Leave
  * it 0 so the driver keeps the BSP value (XPAR_XSPIPS_0_SPI_CLK_FREQ_HZ,
@@ -368,15 +328,10 @@
  * with output-compare and input-capture channels. The fabric IRQ (IRQ_F2P) may
  * not be wired to the GIC on every board, so the overflow-IRQ case is gated off
  * by default here; enable TIMER_HAS_IRQ once the fabric line is routed.
- *
- * On an XSA that does route it the BSP emits XPAR_FABRIC_XTMRCTR_0_INTR, which
- * is what TIMER_IRQ_ID would resolve from -- the same pattern the PL I2C/SPI
- * blocks above use, including the INTERRUPT_PARENT check to tell an AXI INTC
- * input from a GIC SPI. Left disabled until it has actually been run.
  */
-#define TIMER_IDENTIFIER	XPAR_XTMRCTR_0_BASEADDR
+#define TIMER_IDENTIFIER	XPAR_TMRCTR_0_BASEADDR
 #define TIMER_OPS		&capi_timer_xilinx_pl_ops
-#define TIMER_INPUT_CLK_HZ	XPAR_XTMRCTR_0_CLOCK_FREQUENCY
+#define TIMER_INPUT_CLK_HZ	XPAR_TMRCTR_0_CLOCK_FREQ
 #define TIMER_OUTPUT_FREQ_HZ	1000U
 #define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
 #define TIMER_EXTRA_INIT	{ .use_irq = false }
@@ -411,22 +366,8 @@
  */
 #define TIMER_IDENTIFIER	XPAR_XSCUTIMER_0_BASEADDR
 #define TIMER_OPS		&capi_timer_xilinx_ps_scu_ops
-/*
- * The A9 private (SCU) timer has no clock-frequency entry of its own in the
- * BSP: it is clocked from the CPU 3x2x domain, i.e. half the CPU core clock,
- * so derive it rather than referencing a macro the BSP never emits.
- */
-#define TIMER_INPUT_CLK_HZ	(XPAR_CPU_CORE_CLOCK_FREQ_HZ / 2U)
-/*
- * Do NOT ask for a low output frequency here. The SCU prescaler is 8 bits, so
- * the slowest tick this timer can produce is input/256 -- about 1.3 MHz from a
- * 333 MHz source. Requesting 1 kHz silently clamps the prescaler to 255 and
- * still yields ~1.3 MHz, but combined with a 32-bit reload it stretches one
- * period to roughly 55 minutes: the counter then looks frozen across the
- * test's microsecond-scale sampling window and the overflow interrupt never
- * arrives. Run it unprescaled and let the reload value set the period.
- */
-#define TIMER_OUTPUT_FREQ_HZ	TIMER_INPUT_CLK_HZ
+#define TIMER_INPUT_CLK_HZ	XPAR_XSCUTIMER_0_CLOCK_FREQ
+#define TIMER_OUTPUT_FREQ_HZ	1000U
 #define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
 #define TIMER_IRQ_ID		CAPI_IRQ_XILINX_GIC(XPS_SCU_TMR_INT_ID)
 #define TIMER_EXTRA_INIT	{ .use_irq = true, \
@@ -436,25 +377,12 @@
 #define TIMER_HAS_COMPARE	1
 
 #define TIMER_DIRECTION		CAPI_TIMER_COUNT_DOWN
-/*
- * Reload value, not the counter's architectural width (that is 32 bits, see
- * TIMER_COUNTER_WIDTH). Unprescaled at ~333 MHz a full 0xFFFFFFFF reload is
- * ~12.9 s per period, so the overflow-driven cases would sit waiting most of a
- * minute for a handful of interrupts. 0x00100000 is ~3.1 ms, which keeps the
- * rate and async-IRQ cases in the same millisecond ballpark as the TTC mapping
- * above while leaving the counter comfortably fast-moving between samples.
- */
-#define TIMER_COUNTER_MAX	0x00100000U
+#define TIMER_COUNTER_MAX	0xFFFFFFFFU	/* 32-bit SCU down-counter */
 #define TIMER_COUNTER_WIDTH	32U
-#define TIMER_COMPARE_VALUE	0x00080000U
+#define TIMER_COMPARE_VALUE	0x00010000U
 
 #define TIMER_RATE_WINDOW_US	100U
-/*
- * Masks the counter delta, so it must track the RELOAD value the counter wraps
- * at (TIMER_COUNTER_MAX), not the 32-bit register width -- a sample pair that
- * straddles a reload would otherwise compute a delta off by the difference.
- */
-#define TIMER_RATE_COUNTER_MASK	(TIMER_COUNTER_MAX - 1U)
+#define TIMER_RATE_COUNTER_MASK	0xFFFFFFFFU
 #define TIMER_RATE_TOLERANCE_PCT 10U
 
 /*
