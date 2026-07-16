@@ -26,6 +26,16 @@ extern const char platform_name[];
 #ifdef GPIO_OUTPUT_OPS
 #include "capi_gpio.h"
 
+/* If it's not declared, assume the port loopback test is on by default. */
+#ifndef GPIO_HAS_PORT_LOOPBACK
+#define GPIO_HAS_PORT_LOOPBACK 1
+#endif /* GPIO_HAS_PORT_LOOPBACK */
+
+/* If it's not declared, assume the pin loopback test is off by default. */
+#ifndef GPIO_HAS_PIN_LOOPBACK
+#define GPIO_HAS_PIN_LOOPBACK 0
+#endif /* GPIO_HAS_PIN_LOOPBACK */
+
 /**
  * @brief CAPI GPIO config for the output/readback test port.
  */
@@ -34,6 +44,16 @@ extern const struct capi_gpio_port_config gpio_output_config;
  * @brief CAPI GPIO config for the input sampling test port.
  */
 extern const struct capi_gpio_port_config gpio_input_config;
+
+#if GPIO_HAS_PIN_LOOPBACK
+/**
+ * @brief Pin number mappings for loopback testing.
+ */
+extern const uint32_t gpio_output_pin_numbers[];
+extern const uint32_t gpio_input_pin_numbers[];
+extern const uint32_t gpio_num_output_pins;
+extern const uint32_t gpio_num_input_pins;
+#endif /* GPIO_HAS_PIN_LOOPBACK */
 #endif /* GPIO_OUTPUT_OPS */
 
 #ifdef SPI_OPS

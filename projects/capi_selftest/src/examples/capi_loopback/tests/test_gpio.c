@@ -99,6 +99,99 @@ static int gpio_loopback(void)
 	return 0;
 }
 
+#if GPIO_HAS_PIN_LOOPBACK
+/**
+ * @brief Drive individual output pins and verify individual input pins read
+ * 	  the same value.
+ *
+ * This is the pin-based equivalent of gpio_loopback(): it tests the same
+ * loopback behavior but operates on individual pins using capi_gpio_pin_*
+ * functions instead of port-wide bitmask operations.
+ *
+ * API coverage:
+ * 	capi_gpio_pin_set_direction()		direction, loop, error
+ * 	capi_gpio_pin_get_direction()		direction, error
+ * 	capi_gpio_pin_set_raw_value()		loopback, loop, error
+ * 	capi_gpio_pin_get_raw_value()		loopback, error
+ *
+ * Setup assumption: common_data supplies one GPIO output port and one GPIO
+ * input port that form the loopback pair. We test each pin individually.
+ *
+ * @return 0 on pass, negative error code on failure.
+ */
+static int gpio_pin_loopback(void)
+{
+	struct capi_gpio_port_handle *out_port = NULL;
+	struct capi_gpio_port_handle *in_port = NULL;
+	struct capi_gpio_pin out_pin;
+	struct capi_gpio_pin in_pin;
+	uint8_t direction;
+	uint8_t value;
+	int ret;
+
+	/* ---------------------------------------------------------------------
+	 * Open both ports. Pin operations require initialized port handles.
+	 * ------------------------------------------------------------------ */
+	TEST_SECTION("PIN_LOOPBACK");
+	ret = capi_gpio_port_init(&out_port, &gpio_output_config);
+	TEST_ASSERT_EQ(ret, 0, "OUT_PORT_INIT");
+	ret = capi_gpio_port_init(&in_port, &gpio_input_config);
+	TEST_ASSERT_EQ(ret, 0, "IN_PORT_INIT");
+
+	/* ---------------------------------------------------------------------
+	 * Test each configured pin pair.
+	 * ------------------------------------------------------------------ */
+	for (uint32_t i = 0U; i < gpio_num_output_pins; i++) {
+		/* Setup pin descriptors for this pair. */
+		out_pin.port_handle = out_port;
+		out_pin.number = gpio_output_pin_numbers[i];
+		out_pin.flags = CAPI_GPIO_ACTIVE_HIGH;
+
+		in_pin.port_handle = in_port;
+		in_pin.number = gpio_input_pin_numbers[i];
+		in_pin.flags = CAPI_GPIO_ACTIVE_HIGH;
+
+		/* Set directions: output pin to OUTPUT, input pin to INPUT. */
+		ret = capi_gpio_pin_set_direction(&out_pin, CAPI_GPIO_OUTPUT);
+		TEST_ASSERT_EQ(ret, 0, "OUT_PIN_DIR");
+		ret = capi_gpio_pin_set_direction(&in_pin, CAPI_GPIO_INPUT);
+		TEST_ASSERT_EQ(ret, 0, "IN_PIN_DIR");
+
+		/* Verify direction readback. */
+		ret = capi_gpio_pin_get_direction(&out_pin, &direction);
+		TEST_ASSERT_EQ(ret, 0, "OUT_GET_DIR");
+		TEST_ASSERT_EQ(direction, CAPI_GPIO_OUTPUT, "OUT_DIR_READBACK");
+		ret = capi_gpio_pin_get_direction(&in_pin, &direction);
+		TEST_ASSERT_EQ(ret, 0, "IN_GET_DIR");
+		TEST_ASSERT_EQ(direction, CAPI_GPIO_INPUT, "IN_DIR_READBACK");
+
+		/* Drive output pin high; input pin must read high. */
+		ret = capi_gpio_pin_set_raw_value(&out_pin, CAPI_GPIO_HIGH);
+		TEST_ASSERT_EQ(ret, 0, "DRIVE_HIGH");
+		ret = capi_gpio_pin_get_raw_value(&in_pin, &value);
+		TEST_ASSERT_EQ(ret, 0, "READ_HIGH");
+		TEST_ASSERT_EQ(value, CAPI_GPIO_HIGH, "HIGH_READBACK");
+
+		/* Drive output pin low; input pin must read low. */
+		ret = capi_gpio_pin_set_raw_value(&out_pin, CAPI_GPIO_LOW);
+		TEST_ASSERT_EQ(ret, 0, "DRIVE_LOW");
+		ret = capi_gpio_pin_get_raw_value(&in_pin, &value);
+		TEST_ASSERT_EQ(ret, 0, "READ_LOW");
+		TEST_ASSERT_EQ(value, CAPI_GPIO_LOW, "LOW_READBACK");
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Release both ports.
+	 * ------------------------------------------------------------------ */
+	ret = capi_gpio_port_deinit(&out_port);
+	TEST_ASSERT_EQ(ret, 0, "OUT_PORT_DEINIT");
+	ret = capi_gpio_port_deinit(&in_port);
+	TEST_ASSERT_EQ(ret, 0, "IN_PORT_DEINIT");
+
+	return 0;
+}
+#endif /* GPIO_HAS_PIN_LOOPBACK */
+
 /**
  * @brief Verify that the driver rejects clearly invalid arguments.
  *
@@ -211,9 +304,12 @@ static int gpio_reinit(void)
 }
 
 static const struct test_case gpio_subtests[] = {
-	{ "LOOPBACK",    gpio_loopback,    false },
-	{ "ERROR_PATHS", gpio_error_paths, false },
-	{ "REINIT",      gpio_reinit,      false },
+	{ "LOOPBACK",     gpio_loopback,     !GPIO_HAS_PORT_LOOPBACK },
+#if GPIO_HAS_PIN_LOOPBACK
+	{ "PIN_LOOPBACK", gpio_pin_loopback, !GPIO_HAS_PIN_LOOPBACK },
+#endif
+	{ "ERROR_PATHS",  gpio_error_paths,  false },
+	{ "REINIT",       gpio_reinit,       false },
 };
 
 int test_gpio(void)

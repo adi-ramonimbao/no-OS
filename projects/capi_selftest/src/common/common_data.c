@@ -122,6 +122,35 @@ const struct capi_gpio_port_config gpio_input_config = {
 	.flags = NULL,
 	.extra = &gpio_input_extra,
 };
+
+#if GPIO_HAS_PIN_LOOPBACK
+/**
+ * @brief Output pin numbers for loopback testing.
+ */
+const uint32_t gpio_output_pin_numbers[] = GPIO_OUTPUT_PIN_NUMBERS;
+
+/**
+ * @brief Input pin numbers for loopback testing.
+ */
+const uint32_t gpio_input_pin_numbers[] = GPIO_INPUT_PIN_NUMBERS;
+
+/**
+ * @brief Number of output pins in the loopback mapping.
+ */
+const uint32_t gpio_num_output_pins = sizeof(gpio_output_pin_numbers)
+				      / sizeof(gpio_output_pin_numbers[0]);
+
+/**
+ * @brief Number of input pins in the loopback mapping.
+ */
+const uint32_t gpio_num_input_pins = sizeof(gpio_input_pin_numbers)
+				     / sizeof(gpio_input_pin_numbers[0]);
+
+/* Compile-time assertion: pin arrays must have matching sizes */
+_Static_assert(sizeof(gpio_output_pin_numbers) == sizeof(gpio_input_pin_numbers),
+	       "GPIO loopback pin arrays must have the same size");
+#endif /* GPIO_HAS_PIN_LOOPBACK */
+
 #endif /* GPIO_OUTPUT_OPS */
 
 #ifdef SPI_OPS
