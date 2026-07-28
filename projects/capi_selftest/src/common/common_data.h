@@ -9,6 +9,8 @@
 #ifndef __COMMON_DATA_H__
 #define __COMMON_DATA_H__
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "capi_uart.h"
 #include "parameters.h"
 
@@ -59,6 +61,31 @@ extern const uint32_t gpio_input_pin_numbers[];
 extern const uint32_t gpio_num_output_pins;
 extern const uint32_t gpio_num_input_pins;
 #endif /* GPIO_HAS_PIN_LOOPBACK */
+
+/*
+ * Platform hooks for the GPIO-driven IRQ integration test (test_irq.c). The
+ * loopback input pin doubles as an interrupt source: arm() routes that pin to
+ * an IRQ line and returns the CAPI IRQ number, ack() clears the pin's latched
+ * source from inside the ISR, disarm() masks it again. Implemented per platform
+ * in a later commit; arm() returns -ENOTSUP where the board has no GPIO-IRQ
+ * path, causing the IRQ test to skip.
+ */
+/**
+ * @brief Route the loopback input pin to an interrupt line.
+ * @param irq_line - Out: CAPI IRQ number to connect/enable.
+ * @return 0 on success, -ENOTSUP if the board has no GPIO interrupt path,
+ *         negative error code otherwise.
+ */
+int platform_gpio_irq_arm(uint32_t *irq_line);
+/**
+ * @brief Clear the loopback input pin as the interrupt source.
+ * @return true if the input pin was the source and was cleared.
+ */
+bool platform_gpio_irq_ack(void);
+/**
+ * @brief Mask the loopback input pin's interrupt again.
+ */
+void platform_gpio_irq_disarm(void);
 #endif /* GPIO_OUTPUT_OPS */
 
 /**
