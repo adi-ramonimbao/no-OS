@@ -158,5 +158,11 @@ int main(void)
 {
 	Xil_ICacheEnable();
 	Xil_DCacheEnable();
+
+#if SPI_HAS_IRQ
+	if (capi_irq_init(&irq_config) == 0)
+		(void)capi_irq_global_enable();
+#endif
+
 	return example_main();
 }
