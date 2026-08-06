@@ -732,8 +732,6 @@ static int i2c_master_async(void)
 	return 0;
 }
 
-#endif /* I2C_TARGET_OPS */
-
 static int i2c_bus_speed(void)
 {
 	struct capi_i2c_controller_handle *init_handle = NULL;
@@ -772,6 +770,8 @@ static int i2c_bus_speed(void)
 
 	return 0;
 }
+
+#endif /* I2C_TARGET_OPS */
 
 #undef CLEANUP
 
