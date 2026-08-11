@@ -198,7 +198,7 @@ static int spi_async_irq(void)
 	spi_callback_event = 0;
 	spi_callback_extra = 0;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_register_callback(spi_handle,
-			spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
 
 	uint8_t async_tx[] = { 0x55, 0xaa, 0x33, 0xcc };
 	uint8_t async_rx[sizeof(async_tx)];
@@ -280,7 +280,7 @@ static int spi_manual_isr(void)
 	spi_callback_event = 0;
 	spi_callback_extra = 0;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_register_callback(spi_handle,
-			spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
 
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_irq_global_disable(), 0,
 				  "IRQ_DISABLE_FOR_ISR");
@@ -347,7 +347,7 @@ static int spi_async_dma(void)
 	spi_callback_event = 0;
 	spi_callback_extra = 0;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_register_callback(spi_handle,
-			spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
 
 	uint8_t dma_tx[] = { 0x77, 0x88, 0x99, 0xaa };
 	uint8_t dma_rx[sizeof(dma_tx)];
@@ -401,7 +401,7 @@ static int spi_abort(void)
 	spi_callback_event = 0;
 	spi_callback_extra = 0;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_register_callback(spi_handle,
-			spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
 
 	for (uint32_t i = 0U; i < sizeof(spi_abort_tx); i++)
 		spi_abort_tx[i] = (uint8_t)(i ^ 0x5aU);

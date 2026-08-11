@@ -583,7 +583,7 @@ int max_capi_gpio_irq_set_level_edge_trigger(struct capi_gpio_pin *pin,
 	gpio_priv = pin->port_handle->priv;
 
 	config = (mxc_gpio_cfg_t) {
-		.port = MXC_GPIO_GET_GPIO(gpio_priv),
+		.port = MXC_GPIO_GET_GPIO(gpio_priv->id),
 		.mask = (1U << pin->number),
 	};
 

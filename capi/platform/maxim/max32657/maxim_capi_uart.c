@@ -121,16 +121,13 @@ static void _max_capi_uart_msdk_callback(mxc_uart_req_t *req, int result)
 
 /**
  * @brief DMA transfer complete callback function
- * @param transfer The DMA transfer
+ * @param event The event indicating completion status
  * @param ctx The private struct passed into the callback
  */
-static void _max_capi_uart_dma_complete(struct capi_dma_transfer *transfer,
-					void *ctx)
+static void _max_capi_uart_dma_complete(uint32_t event, void *ctx)
 {
 	struct max_capi_uart_priv *uart_priv = (struct max_capi_uart_priv *)ctx;
 	uint32_t id;
-	bool is_tx;
-	enum capi_uart_async_event event;
 	capi_uart_callback callback;
 	void *callback_arg;
 
@@ -138,8 +135,6 @@ static void _max_capi_uart_dma_complete(struct capi_dma_transfer *transfer,
 		return;
 
 	id = uart_priv->id;
-	is_tx = (transfer->xfer_type == CAPI_DMA_MEM_TO_DEV);
-	event = is_tx ? CAPI_UART_EVENT_TX_DONE : CAPI_UART_EVENT_RX_DONE;
 
 	callback = uart_priv->callback;
 	callback_arg = uart_priv->callback_arg;
@@ -175,8 +170,8 @@ static int _max_capi_uart_receive_dma(struct max_capi_uart_priv *priv,
 		.reqsel = MAX_CAPI_DMA_REQUEST_UART_RX,
 	};
 	priv->dma_xfer = (struct capi_dma_transfer) {
-		.src = &priv->uart->fifo,
-		.dst = buf,
+		.src = (capi_dma_glbl_addr_t)&priv->uart->fifo,
+		.dst = (capi_dma_glbl_addr_t)buf,
 		.src_inc = CAPI_DMA_NO_INCREMENT,
 		.dst_inc = CAPI_DMA_BYTE_INCREMENT,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
@@ -235,8 +230,8 @@ static int _max_capi_uart_transmit_dma(struct max_capi_uart_priv *priv,
 		.reqsel = MAX_CAPI_DMA_REQUEST_UART_TX,
 	};
 	priv->dma_xfer = (struct capi_dma_transfer) {
-		.src = buf,
-		.dst = &priv->uart->fifo,
+		.src = (capi_dma_glbl_addr_t)buf,
+		.dst = (capi_dma_glbl_addr_t)&priv->uart->fifo,
 		.src_inc = CAPI_DMA_BYTE_INCREMENT,
 		.dst_inc = CAPI_DMA_NO_INCREMENT,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
@@ -252,7 +247,7 @@ static int _max_capi_uart_transmit_dma(struct max_capi_uart_priv *priv,
 	if (ret)
 		goto error_deinit;
 
-	ret = capi_dma_register_complete_callback(dma_channel_rx[priv->id],
+	ret = capi_dma_register_complete_callback(dma_channel_tx[priv->id],
 			_max_capi_uart_dma_complete,
 			priv);
 	if (ret)
@@ -1100,7 +1095,7 @@ int _write(int file, char *ptr, int len)
 			return -1;
 		}
 
-		return ret;
+		return len;
 	}
 	errno = EBADF;
 	return -1;

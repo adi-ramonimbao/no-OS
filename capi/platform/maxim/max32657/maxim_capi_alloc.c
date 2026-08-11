@@ -31,6 +31,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *******************************************************************************/
 
+#include <stdlib.h>
 #include "capi_alloc.h"
 
 void *capi_malloc_impl(size_t size)

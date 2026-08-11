@@ -100,11 +100,14 @@ extern const struct capi_spi_config spi_controller_config;
  * @brief CAPI SPI device descriptor for the external loopback test.
  */
 extern struct capi_spi_device spi_dev;
+#endif /* SPI_OPS */
+
+#ifdef IRQ_CTRL_IDENTIFIER
 /**
  * @brief CAPI IRQ controller config used before IRQ-backed async tests.
  */
 extern struct capi_irq_config irq_config;
-#endif /* SPI_OPS */
+#endif /* IRQ_CTRL_IDENTIFIER */
 
 #ifdef TIMER_OPS
 #include "capi_timer.h"
@@ -210,21 +213,65 @@ extern const struct capi_timer_config timer_config;
 #endif /* I2C_DUTY_CYCLE */
 
 /*
- * The single-board loopback proves completion through the async callback, so
- * the side running async needs a live interrupt. Which side that is differs by
- * case: the target always listens async (its callback is the completion signal
- * every case waits on), while the master is polled in the sync cases and async
- * only in the dedicated master-async case. A board whose I2C controller has no
- * IRQ path clears the matching flag in parameters.h so those cases skip rather
- * than fail -ENOTSUP. Default is a fully IRQ-capable controller on both sides.
+ * Floor (microseconds) below which a bus-speed transfer time is dominated by
+ * the async poll granularity + ISR latency + timer resolution (the software
+ * floor) rather than on-wire time, so a fast-vs-slow comparison cannot resolve
+ * the SCL rate change. Probes shorter than this skip the direction assert.
+ * Override in parameters.h to match a platform's measured floor.
  */
-#ifndef I2C_TARGET_USE_IRQ
-#define I2C_TARGET_USE_IRQ	1
-#endif /* I2C_TARGET_USE_IRQ */
+#ifndef I2C_SPEED_MIN_RESOLVABLE_US
+#define I2C_SPEED_MIN_RESOLVABLE_US	20000U
+#endif /* I2C_SPEED_MIN_RESOLVABLE_US */
 
-#ifndef I2C_MASTER_USE_IRQ
-#define I2C_MASTER_USE_IRQ	1
-#endif /* I2C_MASTER_USE_IRQ */
+/*
+ * Whether the initiator's controller can honor a non-50% SCL duty ratio. The
+ * duty ratio is a property of the clock-GENERATING (master) side; a target that
+ * never drives SCL cannot honor it, so it is only ever exercised on the
+ * initiator. All Xilinx masters (XIic, XIicPs) lack an asymmetric-duty API, so
+ * this defaults off and the duty sub-block compiles out. Set to 1 in
+ * parameters.h on a platform whose master honors duty_cycle; the sub-block then
+ * runs and asserts the request is accepted and the bus still carries data.
+ */
+#ifndef I2C_DUTY_CYCLE_SUPPORTED
+#define I2C_DUTY_CYCLE_SUPPORTED	0
+#endif /* I2C_DUTY_CYCLE_SUPPORTED */
+
+/*
+ * Two axes gate the I2C suite, kept separate so a new platform sets each on its
+ * own terms:
+ *
+ *   I2C_PAIR_TARGET_ASYNC - both roles are mapped AND the target can arm a
+ *                  background (async, IRQ-backed) listen. Every case runs the
+ *                  target's half async while the initiator blocks; on one core
+ *                  that listen must be armed before the blocking initiator call
+ *                  and complete during it, so a target with no IRQ cannot back
+ *                  the loopback at all. Hence this folds in I2C_TARGET_HAS_IRQ,
+ *                  not just presence.
+ *   I2C_MASTER_ASYNC - the INITIATOR can run async too (its IRQ path is live).
+ *                  Only the MASTER_ASYNC case needs it; the plain cases keep the
+ *                  initiator blocking. That case ANDs it with the pair flag
+ *                  above, so this carries just the initiator half.
+ *
+ * A platform overrides the per-role IRQ flags in its parameters.h; the defaults
+ * below assume a fully-mapped, fully-IRQ-capable board.
+ */
+#ifndef I2C_MASTER_HAS_IRQ
+#define I2C_MASTER_HAS_IRQ	1
+#endif /* I2C_MASTER_HAS_IRQ */
+
+#ifndef I2C_TARGET_HAS_IRQ
+#define I2C_TARGET_HAS_IRQ	1
+#endif /* I2C_TARGET_HAS_IRQ */
+
+#ifndef I2C_PAIR_TARGET_ASYNC
+#if defined(I2C_OPS) && defined(I2C_TARGET_OPS) && I2C_TARGET_HAS_IRQ
+#define I2C_PAIR_TARGET_ASYNC	1
+#else
+#define I2C_PAIR_TARGET_ASYNC	0
+#endif
+#endif /* I2C_PAIR_TARGET_ASYNC */
+
+#define I2C_MASTER_ASYNC	I2C_MASTER_HAS_IRQ
 
 /**
  * @brief CAPI I2C initiator configuration for the loopback tests.
@@ -246,6 +293,105 @@ extern const struct capi_i2c_config i2c_target_config;
  */
 extern struct capi_i2c_device i2c_target_dev;
 #endif /* I2C_TARGET_OPS */
+
+#ifdef UART_ASYNC_OPS
+/*
+ * Second UART instance, wired in EXTERNAL loopback (TX strapped to RX on the
+ * board) and used only by test_uart.c. It is deliberately NOT the console UART
+ * above: the framework's report transport must stay untouched, since the speed
+ * case reprograms the line rate mid-run and a console reconfigured underneath
+ * the log would silence it.
+ *
+ * Internal/local loopback is never used -- uart_async_line_config.loopback is
+ * false -- so every case moves bytes over the real wire.
+ */
+
+/* Line rate the loopback UART is brought up at and restored to. */
+#ifndef UART_ASYNC_BAUDRATE
+#define UART_ASYNC_BAUDRATE	115200U
+#endif /* UART_ASYNC_BAUDRATE */
+
+/*
+ * Reference clock feeding the UART's baud generator. 0 keeps whatever the BSP
+ * configured; a core whose clock the BSP does not publish (a PL UART) sets its
+ * synthesized frequency here, since the baud divider is computed from it.
+ */
+#ifndef UART_ASYNC_CLK_FREQ_HZ
+#define UART_ASYNC_CLK_FREQ_HZ	0U
+#endif /* UART_ASYNC_CLK_FREQ_HZ */
+
+/*
+ * The two rates the speed case times against each other. They must be far
+ * enough apart that the ratio survives the software floor; ~12x here.
+ */
+#ifndef UART_ASYNC_BAUD_SLOW
+#define UART_ASYNC_BAUD_SLOW	9600U
+#endif /* UART_ASYNC_BAUD_SLOW */
+
+#ifndef UART_ASYNC_BAUD_FAST
+#define UART_ASYNC_BAUD_FAST	115200U
+#endif /* UART_ASYNC_BAUD_FAST */
+
+/*
+ * Speed-case payload. At 9600 baud, 256 bytes is ~266 ms on the wire, well
+ * clear of the floor below; at 115200 it is ~22 ms, still clear.
+ */
+#ifndef UART_ASYNC_SPEED_LEN
+#define UART_ASYNC_SPEED_LEN	256U
+#endif /* UART_ASYNC_SPEED_LEN */
+
+/*
+ * Floor (microseconds) below which a measured transfer time is dominated by the
+ * async poll granularity + ISR latency + timer resolution rather than on-wire
+ * time, so a fast-vs-slow comparison cannot resolve the baud change. Legs
+ * shorter than this skip the direction assert. Override in parameters.h to
+ * match a platform's measured floor.
+ */
+#ifndef UART_ASYNC_SPEED_MIN_RESOLVABLE_US
+#define UART_ASYNC_SPEED_MIN_RESOLVABLE_US	5000U
+#endif /* UART_ASYNC_SPEED_MIN_RESOLVABLE_US */
+
+/*
+ * Capability axes, one per gated case. A platform sets these in parameters.h
+ * from its selected backend; the defaults below assume a fully-featured,
+ * IRQ-wired UART.
+ *
+ *   UART_ASYNC_HAS_IRQ - an interrupt is wired to the mapped UART, so use_irq
+ *                  is true and the driver accepts the async ops. A polled build
+ *                  clears it and every async case skips instead of failing on
+ *                  -ENOTSUP. MUST be derived from the same XPAR_*_INTERRUPTS
+ *                  macro that decides use_irq, or the two disagree.
+ *   UART_ASYNC_HAS_LINE_CONFIG - the line format can be reprogrammed at runtime.
+ *                  UART Lite fixes it in the IP, so its set_line_config is
+ *                  unconditionally -ENOTSUP and the speed case has nothing to
+ *                  measure.
+ *   UART_ASYNC_HAS_IRQ_CTL - the backend exposes per-source interrupt masking
+ *                  (set_irq_tx / set_irq_rx / set_irq_err). UART Lite has a
+ *                  single shared enable bit and STM32 lacks the calls entirely.
+ *   UART_ASYNC_HAS_RX_TIMEOUT - an incomplete receive can raise a non-terminal
+ *                  RX_TIMEOUT event. UART Lite has no receive-timeout source.
+ */
+#ifndef UART_ASYNC_HAS_IRQ
+#define UART_ASYNC_HAS_IRQ	1
+#endif /* UART_ASYNC_HAS_IRQ */
+
+#ifndef UART_ASYNC_HAS_LINE_CONFIG
+#define UART_ASYNC_HAS_LINE_CONFIG	1
+#endif /* UART_ASYNC_HAS_LINE_CONFIG */
+
+#ifndef UART_ASYNC_HAS_IRQ_CTL
+#define UART_ASYNC_HAS_IRQ_CTL	1
+#endif /* UART_ASYNC_HAS_IRQ_CTL */
+
+#ifndef UART_ASYNC_HAS_RX_TIMEOUT
+#define UART_ASYNC_HAS_RX_TIMEOUT	1
+#endif /* UART_ASYNC_HAS_RX_TIMEOUT */
+
+/**
+ * @brief CAPI UART configuration for the external-loopback tests.
+ */
+extern const struct capi_uart_config uart_async_config;
+#endif /* UART_ASYNC_OPS */
 
 #ifdef DMA_OPS
 #include "capi_dma.h"

@@ -31,6 +31,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *******************************************************************************/
 
+#include <errno.h>
 #include "capi_time.h"
 #include "mxc_delay.h"
 #include "mxc_sys.h"
@@ -65,17 +66,27 @@ void capi_wait_ms_impl(uint32_t ms)
  */
 int capi_uptime_impl(uint64_t *us)
 {
-	uint64_t ticks, sub_ms;
+	uint64_t ticks_start, ticks_end, sub_us;
 	uint32_t systick_val;
+	uint64_t reload;
 
-	SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk);
-	systick_val = SysTick->VAL;
-	ticks = _system_ticks;
-	SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
+	if (!us)
+		return -EINVAL;
 
-	sub_ms = ((SysTick->LOAD - systick_val) * 1000) / SysTick->LOAD;
+	reload = (uint64_t)SysTick->LOAD + 1ULL;
 
-	*us = ticks * 1000 + sub_ms;
+	do {
+		ticks_start = _system_ticks;
+		systick_val = SysTick->VAL;
+		ticks_end = _system_ticks;
+	} while (ticks_start != ticks_end);
+
+	if (systick_val >= reload)
+		systick_val = (uint32_t)(reload - 1ULL);
+
+	sub_us = (((reload - 1ULL) - systick_val) * 1000ULL) / reload;
+
+	*us = (ticks_start * 1000ULL) + sub_us;
 
 	return 0;
 }

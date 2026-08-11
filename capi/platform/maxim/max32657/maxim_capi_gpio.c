@@ -36,6 +36,7 @@
 #include "maxim_capi_gpio.h"
 #include "mxc_errors.h"
 #include "max32657.h"
+#include "capi_alloc.h"
 
 /** Static variables **********************************************************/
 
@@ -305,7 +306,6 @@ int max_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
 int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
 				    uint8_t direction)
 {
-	struct capi_gpio_port_handle *handle;
 	struct max_capi_gpio_port_priv *priv;
 	mxc_gpio_cfg_t gpio_config;
 
@@ -316,8 +316,6 @@ int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
 
 	if (pin->number >= priv->num_pins)
 		return -EINVAL;
-
-	handle = pin->port_handle;
 
 	gpio_config = (mxc_gpio_cfg_t) {
 		.port = priv->port,

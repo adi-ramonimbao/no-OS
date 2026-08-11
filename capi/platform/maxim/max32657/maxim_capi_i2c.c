@@ -528,12 +528,10 @@ void _max_capi_i2c_dma_cleanup_channel(struct capi_dma_chan **channel)
 
 /**
  * @brief DMA transfer completion callback
- * @param transfer The DMA transfer
+ * @param event The event indicating completion status
  * @param ctx The user data passed (struct max_capi_i2c_priv)
  */
-static void _max_capi_i2c_dma_complete_callback(struct capi_dma_transfer
-		*transfer,
-		void *ctx)
+static void _max_capi_i2c_dma_complete_callback(uint32_t event, void *ctx)
 {
 	struct max_capi_i2c_priv *i2c_priv = ctx;
 
@@ -570,7 +568,7 @@ static void _max_capi_i2c_dma_complete_callback(struct capi_dma_transfer
 	_max_capi_i2c_reset_async_state(i2c_priv);
 
 	if (callback)
-		callback(CAPI_I2C_XFR_DONE, callback_arg, 0);
+		callback(event, callback_arg, 0);
 
 	i2c_priv->callback_active = false;
 }
@@ -637,8 +635,8 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 	};
 
 	dma_tx_xfer = (struct capi_dma_transfer) {
-		.src = tx_buffer,
-		.dst = &i3c->cont_txfifo8,
+		.src = (capi_dma_glbl_addr_t)tx_buffer,
+		.dst = (capi_dma_glbl_addr_t)&i3c->cont_txfifo8,
 		.src_inc = CAPI_DMA_BYTE_INCREMENT,
 		.dst_inc = CAPI_DMA_NO_INCREMENT,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
@@ -742,8 +740,8 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 	};
 
 	dma_rx_xfer = (struct capi_dma_transfer) {
-		.src = &i3c->cont_rxfifo8,
-		.dst = async->data_buf,
+		.src = (capi_dma_glbl_addr_t)&i3c->cont_rxfifo8,
+		.dst = (capi_dma_glbl_addr_t)async->data_buf,
 		.src_inc = CAPI_DMA_NO_INCREMENT,
 		.dst_inc = CAPI_DMA_BYTE_INCREMENT,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,

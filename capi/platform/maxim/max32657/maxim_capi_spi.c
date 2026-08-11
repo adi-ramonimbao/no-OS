@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include "capi_spi.h"
+#include "capi_time.h"
 #include "maxim_capi_dma.h"
 #include "maxim_capi_irq.h"
 #include "maxim_capi_spi.h"
@@ -185,14 +186,14 @@ void _max_capi_delay_config(struct capi_spi_device *device,
 	if (delay_first_ticks > MAX_DELAY_SCLK)
 		goto error;
 	spi_reg->tstime &= ~MXC_F_SPI_TSTIME_PRE;
-	spi_reg->tstime |= (delay_first_ticks << MXC_F_SPI_TSTIME_PRE);
+	spi_reg->tstime |= (delay_first_ticks << MXC_F_SPI_TSTIME_PRE_POS);
 
 	if (delay_last_ticks == 0)
 		delay_last_ticks = 1;
 	if (delay_last_ticks > MAX_DELAY_SCLK)
 		goto error;
 	spi_reg->tstime &= ~MXC_F_SPI_TSTIME_POST;
-	spi_reg->tstime |= (delay_last_ticks << MXC_F_SPI_TSTIME_POST);
+	spi_reg->tstime |= (delay_last_ticks << MXC_F_SPI_TSTIME_POST_POS);
 
 	return;
 error:
@@ -652,33 +653,36 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		.reqsel = MAX_CAPI_DMA_REQUEST_SPI_RX,
 	};
 	dma_transfer_rx = (struct capi_dma_transfer) {
-		.src = &spi_reg->fifo8,
-		.dst = transfer->rx_buf ? transfer->rx_buf : zero_rx,
+		.src = (capi_dma_glbl_addr_t)&spi_reg->fifo8,
+		.dst = transfer->rx_buf ?
+			(capi_dma_glbl_addr_t)transfer->rx_buf :
+			(capi_dma_glbl_addr_t)zero_rx,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
 		.dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
 		.src_inc = CAPI_DMA_NO_INCREMENT,
 		.dst_inc = transfer->rx_buf ?
 			   CAPI_DMA_BYTE_INCREMENT :
 			   CAPI_DMA_NO_INCREMENT,
-			   .length = transfer->rx_size,
-			   .extra = &dma_transfer_rx_extra,
-			   .xfer_type = CAPI_DMA_DEV_TO_MEM,
+		.length = transfer->rx_size,
+		.extra = &dma_transfer_rx_extra,
+		.xfer_type = CAPI_DMA_DEV_TO_MEM,
 	};
 	dma_transfer_tx_extra = (struct max_capi_dma_xfer_extra) {
 		.reqsel = MAX_CAPI_DMA_REQUEST_SPI_TX,
 	};
 	dma_transfer_tx = (struct capi_dma_transfer) {
-		.src = transfer->tx_buf ? transfer->tx_buf : zero_tx,
-		.dst = &spi_reg->fifo8,
+		.src = transfer->tx_buf ?
+			(capi_dma_glbl_addr_t)transfer->tx_buf :
+			(capi_dma_glbl_addr_t)zero_tx,
+		.dst = (capi_dma_glbl_addr_t)&spi_reg->fifo8,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
 		.dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
 		.src_inc = transfer->tx_buf ?
-			   CAPI_DMA_BYTE_INCREMENT :
-			   CAPI_DMA_NO_INCREMENT,
-			   .dst_inc = CAPI_DMA_NO_INCREMENT,
-			   .length = transfer->tx_size,
-			   .extra = &dma_transfer_tx_extra,
-			   .xfer_type = CAPI_DMA_MEM_TO_DEV,
+			   CAPI_DMA_BYTE_INCREMENT : CAPI_DMA_NO_INCREMENT,
+		.dst_inc = CAPI_DMA_NO_INCREMENT,
+		.length = transfer->tx_size,
+		.extra = &dma_transfer_tx_extra,
+		.xfer_type = CAPI_DMA_MEM_TO_DEV,
 	};
 
 	dma_completed_count[spi_id] = 0;
@@ -860,9 +864,9 @@ free_handle:
 		capi_free(spi_handle);
 
 	spi[config->identifier] = NULL;
-	dma_completed_count[spi_id] = 0;
-	async_transfer_in_progress[spi_id] = false;
-	transfer_in_progress[spi_id] = false;
+	dma_completed_count[config->identifier] = 0;
+	async_transfer_in_progress[config->identifier] = false;
+	transfer_in_progress[config->identifier] = false;
 
 	return ret;
 }
@@ -1036,7 +1040,7 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
 	spi_priv = device->controller->priv;
 	spi_id = spi_priv->identifier;
 	spi_reg = MXC_SPI_GET_SPI(spi_id);
-	fifo_async = &spi_priv->fifo_async;
+	fifo_async = &((struct max_capi_spi_priv *)spi_priv)->fifo_async;
 
 	_max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
 	_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);

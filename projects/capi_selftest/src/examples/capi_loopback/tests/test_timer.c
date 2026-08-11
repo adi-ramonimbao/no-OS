@@ -284,23 +284,23 @@ static int timer_async_irq(void)
 	timer_callback_event = 0U;
 	timer_callback_extra = 0;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_register_event_callback(timer,
-			timer_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  timer_test_callback, NULL), 0, "REGISTER_CALLBACK");
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_event_irq_enable(timer,
-			CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
-			"EVENT_IRQ_ENABLE");
+				  CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
+				  "EVENT_IRQ_ENABLE");
 
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_start(timer), 0, "START");
 	TEST_WAIT_UNTIL(timer_callback_count > 0U, TIMER_IRQ_TIMEOUT_US,
 			TIMER_IRQ_STEP_US);
 	TEST_ASSERT_GT_OR_CLEANUP(timer_callback_count, 0U, "IRQ_CB_COUNT");
 	TEST_ASSERT_EQ_OR_CLEANUP(timer_callback_event,
-			CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW, "IRQ_CB_EVENT");
+				  CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW, "IRQ_CB_EVENT");
 	TEST_ASSERT_EQ_OR_CLEANUP(timer_callback_extra, 0, "IRQ_CB_EXTRA");
 
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_stop(timer), 0, "STOP");
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_event_irq_disable(timer,
-			CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
-			"EVENT_IRQ_DISABLE");
+				  CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
+				  "EVENT_IRQ_DISABLE");
 
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_deinit(timer), 0, "DEINIT");
 
@@ -370,10 +370,10 @@ static int timer_irq_rate(void)
 
 	timer_callback_count = 0U;
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_register_event_callback(timer,
-			timer_test_callback, NULL), 0, "REGISTER_CALLBACK");
+				  timer_test_callback, NULL), 0, "REGISTER_CALLBACK");
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_event_irq_enable(timer,
-			CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
-			"EVENT_IRQ_ENABLE");
+				  CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
+				  "EVENT_IRQ_ENABLE");
 
 	/* Run the interrupt for the window; count callbacks over it. */
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_start(timer), 0, "START");
@@ -385,8 +385,8 @@ static int timer_irq_rate(void)
 
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_stop(timer), 0, "STOP");
 	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_event_irq_disable(timer,
-			CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
-			"EVENT_IRQ_DISABLE");
+				  CAPI_TIMER_GLOBAL_EVENT_COUNTER_OVERFLOW), 0,
+				  "EVENT_IRQ_DISABLE");
 	TEST_ASSERT_EQ_OR_CLEANUP(uptime_start_ret, 0, "UPTIME_START");
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "UPTIME_END");
 

@@ -37,6 +37,7 @@
 #include "capi_timer.h"
 #include "tmr.h"
 #include "maxim_capi_gpio.h"
+#include "capi_alloc.h"
 
 #define MAX_CAPI_PWM_TMR_MAX_VAL	0x0000FFFF
 #define MAX_CAPI_PWM_PRESCALER_VAL(n)	((n - 1U) * 16)

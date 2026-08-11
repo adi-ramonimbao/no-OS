@@ -43,7 +43,7 @@ static struct capi_timer_handle *timer[MXC_CFG_TMR_INSTANCES] = {NULL};
 
 /** Forward declarations ******************************************************/
 
-void max_capi_timer_isr(struct capi_timer_handle *handle);
+void max_capi_timer_isr(void *handle);
 
 /** Helper functions **********************************************************/
 
@@ -208,6 +208,8 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	enum max_capi_timer_clock_source clock_source = MAX_CAPI_TIMER_CLOCK_APB;
 	mxc_tmr_clock_t msdk_clock;
 	uint32_t clock_hz;
+	uint32_t prescaler_div;
+	mxc_tmr_pres_t prescaler;
 
 	if (!handle || !config)
 		return -EINVAL;
@@ -254,7 +256,11 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	timer_priv->msdk_clock = msdk_clock;
 
 	timer_priv->identifier = config->identifier;
-	timer_priv->frequency = config->output_freq_hz;
+	prescaler_div = clock_hz / config->output_freq_hz;
+	ret = _max_capi_timer_get_prescaler_for_counter(prescaler_div, &prescaler);
+	if (ret)
+		goto free_priv;
+	timer_priv->frequency = clock_hz / MAX_CAPI_PWM_PRESCALER_TRUE(prescaler);
 
 	if (config->extra) {
 		timer_extra = config->extra;
@@ -414,7 +420,7 @@ int max_capi_timer_counter_config(struct capi_timer_handle *handle,
 		return -ENOTSUP;
 
 	if (!timer_priv->channel[0]) {
-		ret = max_capi_timer_channel_init(handle, 0);
+		ret = capi_timer_channel_init(handle, 0);
 		if (ret)
 			return ret;
 	}
@@ -441,7 +447,7 @@ int max_capi_timer_counter_config(struct capi_timer_handle *handle,
 	}
 
 	if (!timer_priv->channel[0]->enabled) {
-		ret = max_capi_timer_channel_enable(handle, 0);
+		ret = capi_timer_channel_enable(handle, 0);
 		if (ret)
 			return ret;
 	}
@@ -967,13 +973,11 @@ int max_capi_timer_channel_compare_get(struct capi_timer_handle *handle,
 				       uint32_t chan, uint32_t *compare)
 {
 	struct max_capi_timer_priv *timer_priv;
-	mxc_tmr_regs_t *tmr_reg;
 
 	if (!handle || !handle->priv || !compare)
 		return -EINVAL;
 
 	timer_priv = handle->priv;
-	tmr_reg = MXC_TMR_GET_TMR(timer_priv->identifier);
 
 	if (timer_priv->bit_mode == MAX_CAPI_TIMER_BIT_MODE_32BIT) {
 		if (chan != 0)
@@ -1017,15 +1021,22 @@ int max_capi_timer_nsec_to_ticks(const struct capi_timer_handle *handle,
 				 uint64_t duration_ns, uint32_t *ticks)
 {
 	const struct max_capi_timer_priv *timer_priv;
-	uint64_t ns_per_tick, result;
+	uint64_t result;
+	const uint64_t one_billion = 1000000000ULL;
 
 	if (!handle || !handle->priv || !ticks)
 		return -EINVAL;
 
 	timer_priv = handle->priv;
+	if (timer_priv->frequency == 0)
+		return -EINVAL;
 
-	ns_per_tick = (1000000000UL / timer_priv->frequency);
-	result = (duration_ns / ns_per_tick);
+	if (duration_ns > ((UINT64_MAX - (one_billion / 2ULL)) /
+		    timer_priv->frequency))
+		return -EOVERFLOW;
+
+	result = ((duration_ns * timer_priv->frequency) +
+		  (one_billion / 2ULL)) / one_billion;
 
 	if (result > UINT32_MAX)
 		return -EOVERFLOW;
@@ -1046,15 +1057,22 @@ int max_capi_timer_ticks_to_nsec(const struct capi_timer_handle *handle,
 				 uint64_t ticks, uint32_t *duration_ns)
 {
 	const struct max_capi_timer_priv *timer_priv;
-	uint64_t ns_per_tick, result;
+	uint64_t result;
+	const uint64_t one_billion = 1000000000ULL;
 
 	if (!handle || !handle->priv || !duration_ns)
 		return -EINVAL;
 
 	timer_priv = handle->priv;
+	if (timer_priv->frequency == 0)
+		return -EINVAL;
 
-	ns_per_tick = (1000000000UL / timer_priv->frequency);
-	result = ticks * ns_per_tick;
+	if (ticks > ((UINT64_MAX - (timer_priv->frequency / 2ULL)) /
+	    one_billion))
+		return -EOVERFLOW;
+
+	result = ((ticks * one_billion) + (timer_priv->frequency / 2ULL)) /
+		 timer_priv->frequency;
 
 	if (result > UINT32_MAX)
 		return -EOVERFLOW;
@@ -1343,15 +1361,16 @@ int max_capi_timer_is_irq_pending(struct capi_timer_handle *handle,
  * @brief The ISR for the timer peripheral
  * @param handle The timer handle
  */
-void max_capi_timer_isr(struct capi_timer_handle *handle)
+void max_capi_timer_isr(void *handle)
 {
+	struct capi_timer_handle *timer_handle = (struct capi_timer_handle *)handle;
 	struct max_capi_timer_priv *timer_priv;
 	uint32_t flags;
 
-	if (!handle || !handle->priv)
+	if (!handle || !timer_handle->priv)
 		return;
 
-	timer_priv = handle->priv;
+	timer_priv = timer_handle->priv;
 	flags = MXC_TMR_GetFlags(MXC_TMR_GET_TMR(timer_priv->identifier));
 
 	if (flags & MXC_F_TMR_INTFL_IRQ_A) {

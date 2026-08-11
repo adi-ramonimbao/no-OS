@@ -117,4 +117,7 @@
 #define DMA_PLATFORM_INIT()
 #define DMA_XFER_SIZE		64U
 
+/** IRQ */
+#define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
+
 #endif /* __PARAMETERS_H__ */
