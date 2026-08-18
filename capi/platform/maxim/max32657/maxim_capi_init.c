@@ -1,6 +1,6 @@
-/***************************************************************************//**
- *   @file   main.c
- *   @brief  Main file for MAX32657 testing platform
+/*******************************************************************************
+ *   @file   maxim_capi_init.c
+ *   @brief  Pre-main platform initialization for MAX32657 CAPI builds
  *   @author Ramon Miguel Imbao (ramonmiguel.imbao@analog.com)
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
@@ -31,9 +31,14 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *******************************************************************************/
 
-int example_main();
+#include "mxc_sys.h"
+#include "mxc_delay.h"
 
-int main()
+/* Invoked by the MSDK SystemInit() before main(), so CAPI applications get the
+ * SysTick timebase without touching their main.c. */
+int Board_Init(void)
 {
-	return example_main();
+	SysTick_Config(SystemCoreClock / 1000);
+	/* Forces the SysTick enable state to be saved. */
+	return MXC_Delay(1);
 }

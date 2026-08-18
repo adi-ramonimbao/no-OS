@@ -1,5 +1,9 @@
 # MAX32657 CAPI backends. Gated on the neutral CONFIG_CAPI_<MODULE> symbol.
 
+# Pre-main platform init (Board_Init). Gated on CONFIG_CAPI so it replaces the
+# non-CAPI drivers/platform/maxim/max32657/maxim_init.c without clashing.
+no_os_sources_ifdef(CONFIG_CAPI       ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_init.c)
+
 no_os_sources_ifdef(CONFIG_CAPI_UART  ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_uart.c)
 no_os_sources_ifdef(CONFIG_CAPI_ALLOC ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_alloc.c)
 no_os_sources_ifdef(CONFIG_CAPI_TIME  ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_time.c)
