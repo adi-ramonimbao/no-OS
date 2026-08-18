@@ -36,7 +36,7 @@ no_os_sources_ifdef(CONFIG_DMA_MAXIM ${CMAKE_CURRENT_SOURCE_DIR}/common/maxim_dm
 
 # Init and delay are only needed for non-CAPI builds
 # CAPI provides its own initialization and time handling
-if(NOT ${CONFIG_CAPI})
+if(NOT CONFIG_CAPI)
 	target_sources(no-os PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${TARGET}/maxim_init.c)
 
 	# Delay (always included when not using FreeRTOS)
