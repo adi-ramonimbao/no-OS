@@ -23,10 +23,6 @@
 
 static struct capi_uart_handle *uart[MXC_UART_INSTANCES] = {NULL};
 static int8_t stdio_index = -1;
-static bool async_transfer_in_progress[MXC_UART_INSTANCES] = {false};
-static volatile bool dma_completed[MXC_UART_INSTANCES] = {false};
-static struct capi_dma_chan *dma_channel_tx[MXC_UART_INSTANCES] = {NULL};
-static struct capi_dma_chan *dma_channel_rx[MXC_UART_INSTANCES] = {NULL};
 
 /** Forward declarations ******************************************************/
 
@@ -91,7 +87,7 @@ static void _max_capi_uart_msdk_callback(mxc_uart_req_t *req, int result)
 	else
 		event = CAPI_UART_EVENT_INTERRUPT;
 
-	async_transfer_in_progress[id] = false;
+	uart_priv->async_transfer_in_progress = false;
 
 	if (uart_priv->callback)
 		uart_priv->callback(event, uart_priv->callback_arg, result);
@@ -105,25 +101,22 @@ static void _max_capi_uart_msdk_callback(mxc_uart_req_t *req, int result)
 static void _max_capi_uart_dma_complete(uint32_t event, void *ctx)
 {
 	struct max_capi_uart_priv *uart_priv = (struct max_capi_uart_priv *)ctx;
-	uint32_t id;
 	capi_uart_callback callback;
 	void *callback_arg;
 
 	if (!uart_priv)
 		return;
 
-	id = uart_priv->id;
-
 	callback = uart_priv->callback;
 	callback_arg = uart_priv->callback_arg;
 
-	dma_completed[id] = true;
+	uart_priv->dma_completed = true;
 
 	uart_priv->uart->dma &= ~(MXC_F_UART_DMA_TX_EN | MXC_F_UART_DMA_RX_EN);
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_rx[id]);
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_tx[id]);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_rx);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_tx);
 
-	async_transfer_in_progress[id] = false;
+	uart_priv->async_transfer_in_progress = false;
 
 	if (callback)
 		callback(event, callback_arg, 0);
@@ -140,7 +133,7 @@ static int _max_capi_uart_receive_dma(struct max_capi_uart_priv *priv,
 {
 	int ret;
 
-	ret = capi_dma_init_chan(priv->dma_handle, &dma_channel_rx[priv->id], 0);
+	ret = capi_dma_init_chan(priv->dma_handle, &priv->dma_channel_rx, 0);
 	if (ret)
 		goto error;
 
@@ -161,20 +154,20 @@ static int _max_capi_uart_receive_dma(struct max_capi_uart_priv *priv,
 
 	priv->uart->dma |= MXC_F_UART_DMA_RX_EN;
 
-	ret = capi_dma_config_xfer(dma_channel_rx[priv->id], &priv->dma_xfer);
+	ret = capi_dma_config_xfer(priv->dma_channel_rx, &priv->dma_xfer);
 	if (ret)
 		goto error_deinit;
 
-	ret = capi_dma_register_complete_callback(dma_channel_rx[priv->id],
+	ret = capi_dma_register_complete_callback(priv->dma_channel_rx,
 			_max_capi_uart_dma_complete,
 			priv);
 	if (ret)
 		goto error_deinit;
 
-	dma_completed[priv->id] = false;
-	async_transfer_in_progress[priv->id] = true;
+	priv->dma_completed = false;
+	priv->async_transfer_in_progress = true;
 
-	ret = capi_dma_xfer_start(dma_channel_rx[priv->id]);
+	ret = capi_dma_xfer_start(priv->dma_channel_rx);
 	if (ret)
 		goto error_deinit;
 
@@ -182,9 +175,9 @@ static int _max_capi_uart_receive_dma(struct max_capi_uart_priv *priv,
 
 error_deinit:
 	priv->uart->dma &= ~MXC_F_UART_DMA_RX_EN;
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_rx[priv->id]);
+	_max_capi_uart_dma_cleanup_channel(&priv->dma_channel_rx);
 error:
-	async_transfer_in_progress[priv->id] = false;
+	priv->async_transfer_in_progress = false;
 
 	return ret;
 }
@@ -200,7 +193,7 @@ static int _max_capi_uart_transmit_dma(struct max_capi_uart_priv *priv,
 {
 	int ret;
 
-	ret = capi_dma_init_chan(priv->dma_handle, &dma_channel_tx[priv->id], 0);
+	ret = capi_dma_init_chan(priv->dma_handle, &priv->dma_channel_tx, 0);
 	if (ret)
 		goto error;
 
@@ -221,20 +214,20 @@ static int _max_capi_uart_transmit_dma(struct max_capi_uart_priv *priv,
 
 	priv->uart->dma |= MXC_F_UART_DMA_TX_EN;
 
-	ret = capi_dma_config_xfer(dma_channel_tx[priv->id], &priv->dma_xfer);
+	ret = capi_dma_config_xfer(priv->dma_channel_tx, &priv->dma_xfer);
 	if (ret)
 		goto error_deinit;
 
-	ret = capi_dma_register_complete_callback(dma_channel_tx[priv->id],
+	ret = capi_dma_register_complete_callback(priv->dma_channel_tx,
 			_max_capi_uart_dma_complete,
 			priv);
 	if (ret)
 		goto error_deinit;
 
-	dma_completed[priv->id] = false;
-	async_transfer_in_progress[priv->id] = true;
+	priv->dma_completed = false;
+	priv->async_transfer_in_progress = true;
 
-	ret = capi_dma_xfer_start(dma_channel_tx[priv->id]);
+	ret = capi_dma_xfer_start(priv->dma_channel_tx);
 	if (ret)
 		goto error_deinit;
 
@@ -242,9 +235,9 @@ static int _max_capi_uart_transmit_dma(struct max_capi_uart_priv *priv,
 
 error_deinit:
 	priv->uart->dma &= ~MXC_F_UART_DMA_TX_EN;
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_tx[priv->id]);
+	_max_capi_uart_dma_cleanup_channel(&priv->dma_channel_tx);
 error:
-	async_transfer_in_progress[priv->id] = false;
+	priv->async_transfer_in_progress = false;
 
 	return ret;
 }
@@ -373,6 +366,10 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 
 	uart_priv->uart = MXC_UART_GET_UART(config->identifier);
 	uart_priv->id = config->identifier;
+	uart_priv->async_transfer_in_progress = false;
+	uart_priv->dma_completed = false;
+	uart_priv->dma_channel_rx = NULL;
+	uart_priv->dma_channel_tx = NULL;
 
 	if (config->clk_freq_hz == 0) {
 		/** Default */
@@ -459,8 +456,8 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 	return 0;
 
 cleanup_channels:
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_tx[config->identifier]);
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_rx[config->identifier]);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_tx);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_rx);
 shutdown_uart:
 	MXC_UART_Shutdown(uart_priv->uart);
 free_handle:
@@ -490,11 +487,11 @@ int max_capi_uart_deinit(struct capi_uart_handle *handle)
 	uart_priv = handle->priv;
 	id = uart_priv->id;
 
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_rx[id]);
-	_max_capi_uart_dma_cleanup_channel(&dma_channel_tx[id]);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_rx);
+	_max_capi_uart_dma_cleanup_channel(&uart_priv->dma_channel_tx);
 	uart_priv->uart->dma &= ~(MXC_F_UART_DMA_RX_EN | MXC_F_UART_DMA_TX_EN);
-	async_transfer_in_progress[id] = false;
-	dma_completed[id] = false;
+	uart_priv->async_transfer_in_progress = false;
+	uart_priv->dma_completed = false;
 
 	capi_irq_disable(MXC_UART_GET_IRQ(id));
 
@@ -588,16 +585,14 @@ int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
 				uint32_t len)
 {
 	int ret;
-	uint32_t id;
 	struct max_capi_uart_priv *uart_priv;
 
 	if (!handle || !handle->priv || !buf || !len)
 		return -EINVAL;
 
 	uart_priv = handle->priv;
-	id = uart_priv->id;
 
-	if (async_transfer_in_progress[id])
+	if (uart_priv->async_transfer_in_progress)
 		return -EBUSY;
 
 	if (uart_priv->dma_handle)
@@ -614,11 +609,11 @@ int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
 		.callback = _max_capi_uart_msdk_callback,
 	};
 
-	async_transfer_in_progress[id] = true;
+	uart_priv->async_transfer_in_progress = true;
 
 	ret = MXC_UART_TransactionAsync(&uart_priv->async_req);
 	if (ret != E_NO_ERROR) {
-		async_transfer_in_progress[id] = false;
+		uart_priv->async_transfer_in_progress = false;
 		return (ret == E_BUSY ? -EBUSY : -EIO);
 	}
 
@@ -636,16 +631,14 @@ int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
 				 uint8_t *buf, uint32_t len)
 {
 	int ret;
-	uint32_t id;
 	struct max_capi_uart_priv *uart_priv;
 
 	if (!handle || !handle->priv || !buf || !len)
 		return -EINVAL;
 
 	uart_priv = handle->priv;
-	id = uart_priv->id;
 
-	if (async_transfer_in_progress[id])
+	if (uart_priv->async_transfer_in_progress)
 		return -EBUSY;
 
 	if (uart_priv->dma_handle)
@@ -662,11 +655,11 @@ int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
 		.callback = _max_capi_uart_msdk_callback,
 	};
 
-	async_transfer_in_progress[id] = true;
+	uart_priv->async_transfer_in_progress = true;
 
 	ret = MXC_UART_TransactionAsync(&uart_priv->async_req);
 	if (ret != E_NO_ERROR) {
-		async_transfer_in_progress[id] = false;
+		uart_priv->async_transfer_in_progress = false;
 		return (ret == E_BUSY ? -EBUSY : -EIO);
 	}
 

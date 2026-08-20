@@ -42,6 +42,14 @@ struct max_capi_uart_priv {
 	struct capi_dma_transfer dma_xfer;
 	/** DMA transfer extra struct storage for async */
 	struct max_capi_dma_xfer_extra dma_xfer_extra;
+	/** Async transfer in progress flag */
+	volatile bool async_transfer_in_progress;
+	/** DMA completion flag */
+	volatile bool dma_completed;
+	/** TX DMA channel */
+	struct capi_dma_chan *dma_channel_tx;
+	/** RX DMA channel */
+	struct capi_dma_chan *dma_channel_rx;
 };
 
 #define CAPI_UART_HANDLE_MAXIM_INIT()			\
