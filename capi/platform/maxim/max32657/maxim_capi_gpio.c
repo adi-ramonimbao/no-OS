@@ -1,39 +1,17 @@
 /***************************************************************************/ /*
-*   @file   maxim_capi_gpio.c
-*   @brief  Implementation of GPIO functions with CAPI.
-*   @author Ramon Miguel Imbao (ramonmiguel.imbao@analog.com)
+ *   @file   maxim_capi_gpio.c
+ *   @brief  Implementation of GPIO functions with CAPI.
+ *   @author Ramon Miguel Imbao (ramonmiguel.imbao@analog.com)
 ********************************************************************************
-* Copyright 2026(c) Analog Devices, Inc.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-* 1. Redistributions of source code must retain the above copyright notice,
-*    this list of conditions and the following disclaimer.
-*
-* 2. Redistributions in binary form must reproduce the above copyright notice,
-*    this list of conditions and the following disclaimer in the documentation
-*    and/or other materials provided with the distribution.
-*
-* 3. Neither the name of Analog Devices, Inc. nor the names of its
-*    contributors may be used to endorse or promote products derived from this
-*    software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
-* IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-* EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-* LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
-* OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-* LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-* EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Copyright 2026(c) Analog Devices, Inc.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <errno.h>
 #include "gpio.h"
 #include "maxim_capi_gpio.h"
+#include "maxim_capi_gpio_priv.h"
 #include "mxc_errors.h"
 #include "max32657.h"
 #include "capi_alloc.h"
@@ -41,6 +19,23 @@
 /** Static variables **********************************************************/
 
 static struct capi_gpio_port_handle *gpio[MXC_CFG_GPIO_INSTANCES] = {NULL};
+
+/** Helper functions **********************************************************/
+
+/**
+ * @brief Set/unset the EN0 register
+ * @param regs The GPIO register
+ * @param mask The bitmask to set/unset
+ * @param is_enabled Whether to set or unset
+ */
+static void _max_capi_gpio_set_enable(mxc_gpio_regs_t *regs, uint32_t mask,
+				      uint8_t is_enabled)
+{
+	if (is_enabled)
+		regs->en0 |= mask;
+	else
+		regs->en0 &= ~mask;
+}
 
 /** GPIO functions implemenation **********************************************/
 /**
@@ -65,28 +60,30 @@ int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 	if (config->num_pins == 0 || config->num_pins > MXC_CFG_GPIO_PINS_PORT)
 		return -EINVAL;
 
-	// if (gpio[config->identifier] != NULL) {
-	// 	*handle = gpio[config->identifier];
-	// 	return 0;
-	// }
-
 	if (*handle == NULL) {
 		port_handle = capi_calloc(1, sizeof(*port_handle));
 		if (!port_handle)
 			return -ENOMEM;
+
+		priv = capi_calloc(1, sizeof(*priv));
+		if (!priv) {
+			capi_free(port_handle);
+			return -ENOMEM;
+		}
+
+		port_handle->priv = priv;
 		port_handle->init_allocated = true;
 	} else {
 		port_handle = *handle;
+
+		if (!port_handle->priv)
+			return -EINVAL;
+
+		priv = port_handle->priv;
+
 		port_handle->init_allocated = false;
 	}
 
-	priv = capi_calloc(1, sizeof(*priv));
-	if (!priv) {
-		ret = -ENOMEM;
-		goto free_handle;
-	}
-
-	port_handle->priv = priv;
 	port_handle->ops = config->ops;
 
 	priv->id = config->identifier;
@@ -107,18 +104,18 @@ int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 
 	ret = MXC_GPIO_Init(config->identifier);
 	if (ret != E_NO_ERROR)
-		goto free_priv;
+		goto free_handle;
 
 	gpio[config->identifier] = port_handle;
 	*handle = port_handle;
 
 	return 0;
 
-free_priv:
-	capi_free(priv);
 free_handle:
-	if (port_handle->init_allocated)
+	if (port_handle->init_allocated) {
+		capi_free(priv);
 		capi_free(port_handle);
+	}
 
 	gpio[config->identifier] = NULL;
 
@@ -141,23 +138,15 @@ int max_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
 	gpio_priv = (*handle)->priv;
 	id = gpio_priv->id;
 
-	capi_free((*handle)->priv);
-
-	if ((*handle)->init_allocated)
+	if ((*handle)->init_allocated) {
+		capi_free((*handle)->priv);
 		capi_free(*handle);
+	}
 
 	gpio[id] = NULL;
 	*handle = NULL;
 
 	return 0;
-}
-
-static void set_enable(mxc_gpio_regs_t *regs, uint32_t mask, uint8_t is_enabled)
-{
-	if (is_enabled)
-		regs->en0 |= mask;
-	else
-		regs->en0 &= ~mask;
 }
 
 /**
@@ -189,7 +178,7 @@ int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
 	gpio_config.func = MXC_GPIO_FUNC_OUT;
 	gpio_config.mask = ~direction_bitmask & priv->pin_mask;
 	MXC_GPIO_Config(&gpio_config);
-	set_enable(priv->port, ~direction_bitmask & priv->pin_mask, true);
+	_max_capi_gpio_set_enable(priv->port, ~direction_bitmask & priv->pin_mask, true);
 	MXC_GPIO_OutClr(priv->port, ~direction_bitmask & priv->pin_mask);
 
 	/* Set the input pins */
@@ -242,7 +231,7 @@ int max_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle *handle,
 	set_pins = (uint32_t)value_bitmask & priv->pin_mask;
 	reset_pins = (uint32_t)~value_bitmask & priv->pin_mask;
 
-	set_enable(priv->port, priv->pin_mask, true);
+	_max_capi_gpio_set_enable(priv->port, priv->pin_mask, true);
 	MXC_GPIO_OutSet(priv->port, set_pins);
 	MXC_GPIO_OutClr(priv->port, reset_pins);
 
@@ -388,7 +377,7 @@ int max_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin, uint8_t value)
 	if (pin->number >= priv->num_pins)
 		return -EINVAL;
 
-	set_enable(priv->port, (1 << pin->number), true);
+	_max_capi_gpio_set_enable(priv->port, (1 << pin->number), true);
 	switch (value) {
 	case CAPI_GPIO_LOW:
 		MXC_GPIO_OutClr(priv->port, (1 << pin->number));
@@ -425,8 +414,8 @@ int max_capi_gpio_pin_get_raw_value(struct capi_gpio_pin *pin, uint8_t *value)
 	if (pin->number >= priv->num_pins)
 		return -EINVAL;
 
-	set_enable(priv->port, (1 << pin->number), true);
-	if (priv->extra.func == MAX_CAPI_GPIO_FUNC_IN)
+	_max_capi_gpio_set_enable(priv->port, (1 << pin->number), true);
+	if (priv->direction_mask & (1U << pin->number)) /* Input */
 		*value = MXC_GPIO_InGet(priv->port,
 					(1U << pin->number)) >> pin->number;
 	else
@@ -521,7 +510,7 @@ int max_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
 	priv = handle->priv;
 	masked_pins = (uint32_t)pins_bitmask & priv->pin_mask;
 
-	set_enable(priv->port, masked_pins, true);
+	_max_capi_gpio_set_enable(priv->port, masked_pins, true);
 	MXC_GPIO_OutToggle(priv->port, masked_pins);
 
 	return 0;
@@ -541,10 +530,10 @@ int max_capi_gpio_pin_toggle(struct capi_gpio_pin *pin)
 
 	priv = pin->port_handle->priv;
 
-	if (pin->number > priv->num_pins)
+	if (pin->number >= priv->num_pins)
 		return -EINVAL;
 
-	set_enable(priv->port, (1U << pin->number), true);
+	_max_capi_gpio_set_enable(priv->port, (1U << pin->number), true);
 	MXC_GPIO_OutToggle(priv->port, (1U << pin->number));
 
 	return 0;

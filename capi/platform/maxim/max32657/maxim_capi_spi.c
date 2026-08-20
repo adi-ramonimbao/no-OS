@@ -5,30 +5,7 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <stdio.h>
@@ -38,8 +15,11 @@
 #include "maxim_capi_dma.h"
 #include "maxim_capi_irq.h"
 #include "maxim_capi_spi.h"
+#include "maxim_capi_spi_priv.h"
 #include "maxim_capi_gpio.h"
 #include "spi.h"
+
+#define MAX_DELAY_SCLK 255
 
 /** Forward declarations ******************************************************/
 
@@ -780,22 +760,29 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 		spi_handle = capi_calloc(1, sizeof(*spi_handle));
 		if (!spi_handle)
 			return -ENOMEM;
+
+		spi_priv = capi_calloc(1, sizeof(*spi_priv));
+		if (!spi_priv) {
+			capi_free(spi_handle);
+			return -ENOMEM;
+		}
+
+		spi_handle->priv = spi_priv;
 		spi_handle->init_allocated = true;
 	} else {
 		spi_handle = *handle;
-		spi_handle->init_allocated = false;
-	}
 
-	spi_priv = capi_calloc(1, sizeof(*spi_priv));
-	if (!spi_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
+		if (!spi_handle->priv)
+			return -EINVAL;
+
+		spi_priv = spi_handle->priv;
+
+		spi_handle->init_allocated = false;
 	}
 
 	spi_handle->ops = config->ops;
 	spi_priv->identifier = config->identifier;
 	spi_priv->clock_freq = config->clk_freq_hz;
-	spi_handle->priv = spi_priv;
 	spi_id = spi_priv->identifier;
 
 	/* Copy user config or set defaults */
@@ -828,16 +815,6 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 			goto shutdown_spi;
 	}
 
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto deinit_dma;
-	}
-
 	IRQn_Type spi_irq = MXC_SPI_GET_IRQ(spi_id);
 	ret = capi_irq_connect(spi_irq, max_capi_spi_isr, spi_handle);
 	if (ret)
@@ -858,10 +835,11 @@ deinit_dma:
 	_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
 shutdown_spi:
 	MXC_SPI_Shutdown(MXC_SPI_GET_SPI(spi_id));
-	capi_free(spi_priv);
-free_handle:
-	if (spi_handle->init_allocated)
+
+	if (spi_handle->init_allocated) {
+		capi_free(spi_priv);
 		capi_free(spi_handle);
+	}
 
 	spi[config->identifier] = NULL;
 	dma_completed_count[config->identifier] = 0;
@@ -901,8 +879,8 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 
 	capi_irq_disable(MXC_SPI_GET_IRQ(spi_id));
 
-	capi_free(spi_priv);
 	if (handle->init_allocated) {
+		capi_free(spi_priv);
 		capi_free(handle);
 	}
 

@@ -5,30 +5,7 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <stdint.h>
@@ -37,6 +14,7 @@
 #include "spc.h"
 #include "max32657.h"
 #include "maxim_capi_dma.h"
+#include "maxim_capi_dma_priv.h"
 #include "maxim_capi_irq.h"
 #include "capi_irq.h"
 
@@ -89,7 +67,6 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 	int ret;
 	struct capi_dma_handle *dma_handle;
 	struct max_capi_dma_priv *dma_priv;
-	struct capi_irq_config irq_config;
 	uint8_t num_channels = MXC_DMA_CHANNELS;
 
 	if (!handle || !config)
@@ -110,22 +87,32 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 		dma_handle = capi_calloc(1, sizeof(*dma_handle));
 		if (!dma_handle)
 			return -ENOMEM;
+
+		dma_priv = capi_calloc(1, sizeof(*dma_priv));
+		if (!dma_priv) {
+			capi_free(dma_handle);
+			return -ENOMEM;
+		}
+
+		dma_handle->priv = dma_priv;
 		dma_handle->init_allocated = true;
 	} else {
 		dma_handle = *handle;
+
+		if (!dma_handle->priv)
+			return -EINVAL;
+
+		dma_priv = dma_handle->priv;
+
 		dma_handle->init_allocated = false;
 	}
 
-	dma_priv = capi_calloc(1, sizeof(*dma_priv));
-	if (!dma_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
-	}
+	dma_priv->num_channels = num_channels;
 	dma_priv->channels = capi_calloc(num_channels,
 					 sizeof(struct capi_dma_chan *));
 	if (!dma_priv->channels) {
 		ret = -ENOMEM;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	ret = MXC_DMA_Init(MXC_DMA1_S);
@@ -136,32 +123,19 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 
 	dma_priv->id = config->id;
 	dma_handle->ops = config->ops;
-	dma_handle->priv = dma_priv;
-
-	irq_config = (struct capi_irq_config) {
-		.irq_ctrl_id = 0,
-	};
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto deinit_dma;
-	}
 
 	dma = dma_handle;
 	*handle = dma_handle;
 
 	return 0;
-deinit_dma:
-	MXC_DMA_DeInit(MXC_DMA1_S);
-	MXC_SYS_ClockDisable(MXC_SYS_PERIPH_CLOCK_DMA1);
+
 free_channels:
 	capi_free(dma_priv->channels);
-free_priv:
-	capi_free(dma_priv);
 free_handle:
-	if (dma_handle->init_allocated)
+	if (dma_handle->init_allocated) {
+		capi_free(dma_priv);
 		capi_free(dma_handle);
+	}
 
 	dma = NULL;
 
@@ -195,9 +169,10 @@ int max_capi_dma_deinit(struct capi_dma_handle *handle)
 	}
 
 	capi_free(dma_priv->channels);
-	capi_free(dma_priv);
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(dma_priv);
 		capi_free(handle);
+	}
 
 	dma = NULL;
 
@@ -224,7 +199,7 @@ int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 
 	dma_priv = handle->priv;
 
-	if (id > dma_priv->num_channels)
+	if (id >= dma_priv->num_channels)
 		return -EINVAL;
 
 	if (dma_priv->channels[id] != NULL) {
@@ -275,6 +250,7 @@ int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 	return 0;
 
 free_channel_priv:
+	capi_irq_disable(chan->irq_num);
 	capi_free(ch_priv);
 	MXC_DMA_ReleaseChannel(hw_id);
 free_channel:

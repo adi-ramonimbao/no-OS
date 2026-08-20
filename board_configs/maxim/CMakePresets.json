@@ -121,7 +121,8 @@
 				"PLATFORM": "maxim",
 				"TARGET": "max32657",
 				"TARGET_NUM": "32657",
-				"BOARD_CONFIG_FILE": "max32657evkit_defconfig"
+				"BOARD_CONFIG_FILE": "max32657evkit_defconfig",
+				"OPENOCD_INTERFACE": "interface/jlink.cfg"
 			}
 		}
 	]

@@ -5,36 +5,14 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <errno.h>
 #include <stdint.h>
 #include "maxim_capi_irq.h"
 #include "maxim_capi_timer.h"
+#include "maxim_capi_timer_priv.h"
 #include "tmr.h"
 
 /** Static variables **********************************************************/
@@ -229,19 +207,26 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 		timer_handle = capi_calloc(1, sizeof(*timer_handle));
 		if (!timer_handle)
 			return -ENOMEM;
+
+		timer_priv = capi_calloc(1, sizeof(*timer_priv));
+		if (!timer_priv) {
+			capi_free(timer_handle);
+			return -ENOMEM;
+		}
+
+		timer_handle->priv = timer_priv;
 		timer_handle->init_allocated = true;
 	} else {
 		timer_handle = *handle;
+
+		if (!timer_handle->priv)
+			return -EINVAL;
+
+		timer_priv = timer_handle->priv;
+
 		timer_handle->init_allocated = false;
 	}
 
-	timer_priv = capi_calloc(1, sizeof(*timer_priv));
-	if (!timer_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
-	}
-
-	timer_handle->priv = timer_priv;
 	timer_handle->ops = config->ops;
 
 	if (config->input_clock_identifier)
@@ -249,7 +234,7 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 
 	ret = _max_capi_timer_get_clock_frequency(clock_source, &clock_hz, &msdk_clock);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	timer_priv->clock_source = clock_source;
 	timer_priv->clock_freq_hz = clock_hz;
@@ -259,7 +244,7 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	prescaler_div = clock_hz / config->output_freq_hz;
 	ret = _max_capi_timer_get_prescaler_for_counter(prescaler_div, &prescaler);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 	timer_priv->frequency = clock_hz / MAX_CAPI_PWM_PRESCALER_TRUE(prescaler);
 
 	if (config->extra) {
@@ -268,29 +253,18 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 		if (bit_mode != MAX_CAPI_TIMER_BIT_MODE_32BIT &&
 		    bit_mode != MAX_CAPI_TIMER_BIT_MODE_16BIT_DUAL) {
 			ret = -EINVAL;
-			goto free_priv;
+			goto free_handle;
 		}
-	}
-
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto free_priv;
 	}
 
 	IRQn_Type timer_irq = MXC_TMR_GET_IRQ(timer_priv->identifier);
 	ret = capi_irq_connect(timer_irq, max_capi_timer_isr, timer_handle);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	ret = capi_irq_enable(timer_irq);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	timer_priv->bit_mode = bit_mode;
 
@@ -298,19 +272,16 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	timer_priv->global_callback_arg = NULL;
 	timer_priv->global_events_enabled = 0;
 
-	timer_priv->channel[0] = NULL;
-	timer_priv->channel[1] = NULL;
-
 	timer[config->identifier] = timer_handle;
 	*handle = timer_handle;
 
 	return 0;
 
-free_priv:
-	capi_free(timer_priv);
 free_handle:
-	if (timer_handle->init_allocated)
+	if (timer_handle->init_allocated) {
+		capi_free(timer_priv);
 		capi_free(timer_handle);
+	}
 
 	timer[config->identifier] = NULL;
 
@@ -350,10 +321,10 @@ int max_capi_timer_deinit(struct capi_timer_handle *handle)
 
 	capi_irq_disable(MXC_TMR_GET_IRQ(timer_priv->identifier));
 
-	capi_free(handle->priv);
-
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(handle->priv);
 		capi_free(handle);
+	}
 
 	timer[id] = NULL;
 

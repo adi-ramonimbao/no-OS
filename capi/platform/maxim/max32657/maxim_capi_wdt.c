@@ -5,38 +5,17 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <errno.h>
 #include <string.h>
 #include "maxim_capi_irq.h"
 #include "maxim_capi_wdt.h"
+#include "maxim_capi_wdt_priv.h"
 #include "capi_wdt.h"
 #include "capi_irq.h"
+#include "capi_alloc.h"
 #include "max32657.h"
 
 /** Static variables **********************************************************/
@@ -131,16 +110,24 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 		wdt_handle = capi_calloc(1, sizeof(*wdt_handle));
 		if (!wdt_handle)
 			return -ENOMEM;
+
+		wdt_priv = capi_calloc(1, sizeof(*wdt_priv));
+		if (!wdt_priv) {
+			capi_free(wdt_handle);
+			return -ENOMEM;
+		}
+
+		wdt_handle->priv = wdt_priv;
 		wdt_handle->init_allocated = true;
 	} else {
 		wdt_handle = *handle;
-		wdt_handle->init_allocated = false;
-	}
 
-	wdt_priv = capi_calloc(1, sizeof(*wdt_priv));
-	if (!wdt_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
+		if (!wdt_handle->priv)
+			return -EINVAL;
+
+		wdt_priv = wdt_handle->priv;
+
+		wdt_handle->init_allocated = false;
 	}
 
 	clock_source = MAX_CAPI_WDT_CLOCK_PCLK;
@@ -155,7 +142,7 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	wdt_priv->clock_freq_hz = _max_capi_wdt_get_clock_freq(clock_source);
 	if (wdt_priv->clock_freq_hz == 0) {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	rst_flags = MXC_WDT_GetResetFlag(MXC_WDT);
@@ -169,7 +156,7 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	MXC_WDT_Disable(MXC_WDT);
 	MXC_WDT_ClearResetFlag(MXC_WDT);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	/** Execute the WDT feed sequence and disable the WDT */
 	__disable_irq();
@@ -185,26 +172,15 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	/** Configure WDTn_CLKSEL.source to select the clock source */
 	ret = MXC_WDT_SetClockSource(MXC_WDT, (mxc_wdt_clock_t)clock_source);
 	if (ret)
-		goto free_priv;
-
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto free_priv;
-	}
+		goto free_handle;
 
 	ret = capi_irq_connect(WDT_IRQn, max_capi_wdt_isr, wdt_handle);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	ret = capi_irq_enable(WDT_IRQn);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	/** Restore reset flags */
 	MXC_WDT->ctrl |= rst_flags;
@@ -212,7 +188,6 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	wdt_priv->configured = false;
 	wdt_priv->enabled = false;
 
-	wdt_handle->priv = wdt_priv;
 	wdt_handle->ops = config->ops;
 
 	wdt[config->identifier] = wdt_handle;
@@ -220,11 +195,11 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 
 	return 0;
 
-free_priv:
-	capi_free(wdt_priv);
 free_handle:
-	if (wdt_handle->init_allocated)
+	if (wdt_handle->init_allocated) {
+		capi_free(wdt_priv);
 		capi_free(wdt_handle);
+	}
 
 	wdt[config->identifier] = NULL;
 
@@ -240,6 +215,7 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
 {
 	const struct max_capi_wdt_priv *wdt_priv;
 	uint8_t id;
+	int ret;
 
 	if (!handle || !handle->priv)
 		return -EINVAL;
@@ -247,15 +223,18 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
 	wdt_priv = handle->priv;
 	id = wdt_priv->id;
 
+	ret = MXC_WDT_Shutdown(MXC_WDT);
+
 	capi_irq_disable(WDT_IRQn);
 
-	capi_free(handle->priv);
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(handle->priv);
 		capi_free(handle);
+	}
 
 	wdt[id] = NULL;
 
-	return MXC_WDT_Shutdown(MXC_WDT);
+	return ret;
 }
 
 /**
@@ -265,7 +244,7 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
  * @param channels Where to store the number of channels.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_get_chan_count(struct capi_wdt_handle *handle, int *channels)
+int max_capi_wdt_get_chan_count(struct capi_wdt_handle *handle, int *channels)
 {
 	if (!handle || !channels)
 		return -EINVAL;
@@ -333,7 +312,7 @@ int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
 	else
 		MXC_WDT->ctrl &= ~MXC_F_WDT_CTRL_WIN_EN;
 
-	if (chan_config->irq_mode) {
+	if (chan_config->irq_enabled) {
 		/**
 		 * Set WDTn_CTRL.wdt_int_en to generate an interrupt when a
 		 * WDT late interrupt event occurs...
@@ -463,7 +442,7 @@ void max_capi_wdt_isr(void *handle)
 struct capi_wdt_ops max_capi_wdt_ops = {
 	.init = max_capi_wdt_init,
 	.deinit = max_capi_wdt_deinit,
-	.get_chan_count = max_capi_get_chan_count,
+	.get_chan_count = max_capi_wdt_get_chan_count,
 	.setup_chan = max_capi_wdt_setup_chan,
 	.disable_chan = max_capi_wdt_disable_chan,
 	.feed_chan = max_capi_wdt_feed_chan,
@@ -500,6 +479,11 @@ int max_capi_wdt_get_flags(struct capi_wdt_handle *handle, uint32_t *flags)
 	return 0;
 }
 
+/**
+ * @brief Clear the interrupt and reset flags from the WDT peripheral
+ * @param handle The WDT handle
+ * @return 0 on success, negative error code otherwise
+ */
 int max_capi_wdt_clear_flags(struct capi_wdt_handle *handle)
 {
 	if (!handle)

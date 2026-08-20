@@ -5,30 +5,7 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <errno.h>
@@ -39,6 +16,7 @@
 #include "capi_uart.h"
 #include "maxim_capi_irq.h"
 #include "maxim_capi_uart.h"
+#include "maxim_capi_uart_priv.h"
 #include <sys/stat.h>
 
 /** Static declarations *******************************************************/
@@ -370,19 +348,25 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 		uart_handle = capi_calloc(1, sizeof(*uart_handle));
 		if (!uart_handle)
 			return -ENOMEM;
+
+		uart_priv = capi_calloc(1, sizeof(*uart_priv));
+		if (!uart_priv) {
+			capi_free(uart_handle);
+			return -ENOMEM;
+		}
+
+		uart_handle->priv = uart_priv;
 		uart_handle->init_allocated = true;
 	} else {
 		uart_handle = *handle;
+
+		if (!uart_handle->priv)
+			return -EINVAL;
+
+		uart_priv = uart_handle->priv;
 		uart_handle->init_allocated = false;
 	}
 
-	uart_priv = capi_calloc(1, sizeof(*uart_priv));
-	if (!uart_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
-	}
-
-	uart_handle->priv = uart_priv;
 	uart_handle->ops = config->ops;
 
 	uart_extra = config->extra;
@@ -401,7 +385,7 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 		clk_src = MXC_UART_IBRO_CLK;
 	} else {
 		ret = -ENOTSUP;
-		goto free_priv;
+		goto free_handle;
 	}
 	uart_priv->clk_src = clk_src;
 
@@ -420,36 +404,36 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 
 	ret = _max_capi_uart_map_line_config(&line_cfg, &size, &parity, &stop);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	uart_priv->line_config = line_cfg;
 
 	ret = MXC_UART_Init(uart_priv->uart, baud_rate, clk_src);
 	if (ret != E_NO_ERROR) {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	ret = _max_uart_pins_config(uart_extra->vssel);
 	if (ret)
-		goto free_priv;
+		goto free_handle;
 
 	ret = MXC_UART_SetDataSize(uart_priv->uart, size);
 	if (ret != E_NO_ERROR) {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	ret = MXC_UART_SetParity(uart_priv->uart, parity);
 	if (ret != E_NO_ERROR) {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	ret = MXC_UART_SetStopBits(uart_priv->uart, stop);
 	if (ret != E_NO_ERROR) {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	if (config->dma_handle && uart_extra->dma_config) {
@@ -459,17 +443,6 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 		if (ret)
 			goto shutdown_uart;
 	}
-
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto cleanup_channels;
-	}
-
 
 	IRQn_Type irq = MXC_UART_GET_IRQ(config->identifier);
 	ret = capi_irq_connect(irq, max_capi_uart_isr, uart_handle);
@@ -490,11 +463,11 @@ cleanup_channels:
 	_max_capi_uart_dma_cleanup_channel(&dma_channel_rx[config->identifier]);
 shutdown_uart:
 	MXC_UART_Shutdown(uart_priv->uart);
-free_priv:
-	capi_free(uart_priv);
 free_handle:
-	if (uart_handle->init_allocated)
+	if (uart_handle->init_allocated) {
+		capi_free(uart_priv);
 		capi_free(uart_handle);
+	}
 
 	uart[config->identifier] = NULL;
 
@@ -526,9 +499,10 @@ int max_capi_uart_deinit(struct capi_uart_handle *handle)
 	capi_irq_disable(MXC_UART_GET_IRQ(id));
 
 	MXC_UART_Shutdown(uart_priv->uart);
-	capi_free(handle->priv);
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(uart_priv);
 		capi_free(handle);
+	}
 
 	if (stdio_index == id)
 		stdio_index = -1;
@@ -597,6 +571,8 @@ int max_capi_uart_transmit(struct capi_uart_handle *handle, uint8_t *buf,
 		if (ret != E_SUCCESS)
 			return -EIO;
 	}
+
+	while (MXC_UART_GetStatus(uart_priv->uart) & MXC_F_UART_STATUS_TX_BUSY);
 
 	return 0;
 }

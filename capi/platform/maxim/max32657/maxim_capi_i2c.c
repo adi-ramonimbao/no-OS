@@ -5,30 +5,7 @@
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of Analog Devices, Inc. nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES, INC. “AS IS” AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL ANALOG DEVICES, INC. BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: BSD-3-Clause
 *******************************************************************************/
 
 #include <errno.h>
@@ -37,6 +14,7 @@
 #include "capi_dma.h"
 #include "capi_irq.h"
 #include "maxim_capi_i2c.h"
+#include "maxim_capi_i2c_priv.h"
 #include "maxim_capi_dma.h"
 #include "maxim_capi_irq.h"
 #include "i3c.h"
@@ -103,9 +81,11 @@ static int _max_capi_i2c_get_frequencies(uint32_t i2c_freq, uint32_t *pp_freq,
 	if (!pp_freq || !od_freq)
 		return -EINVAL;
 
-	/** Values obtained through trial-and-error by sweeping through
-	    PP and OD frequencies and getting the I2C frequency.
-	    Lowest frequencies chosen for power efficiency. */
+	/**
+	 * Values obtained through trial-and-error by sweeping through
+	 * PP and OD frequencies and getting the I2C frequency.
+	 * Lowest frequencies chosen for power efficiency.
+	 * */
 	switch (i2c_freq) {
 	case MAX_CAPI_I2C_SPEED_STANDARD:
 		*pp_freq = 2500000;
@@ -1004,23 +984,30 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 		i2c_handle = capi_calloc(1, sizeof(*i2c_handle));
 		if (!i2c_handle)
 			return -ENOMEM;
+
+		i2c_priv = capi_calloc(1, sizeof(*i2c_priv));
+		if (!i2c_priv) {
+			capi_free(i2c_handle);
+			return -ENOMEM;
+		}
+
+		i2c_handle->priv = i2c_priv;
 		i2c_handle->init_allocated = true;
 	} else {
 		i2c_handle = *handle;
-		i2c_handle->init_allocated = false;
-	}
 
-	i2c_priv = capi_calloc(1, sizeof(*i2c_priv));
-	if (!i2c_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
+		if (!i2c_handle->priv)
+			return -EINVAL;
+
+		i2c_priv = i2c_handle->priv;
+
+		i2c_handle->init_allocated = false;
 	}
 
 	i2c_handle->ops = config->ops;
 	i2c_extra = config->extra;
 	i2c_priv->identifier = config->identifier;
 	i2c_priv->extra = i2c_extra;
-	i2c_handle->priv = i2c_priv;
 	i2c_id = i2c_priv->identifier;
 
 	if (config->clk_freq_hz <= MAX_CAPI_I2C_SPEED_STANDARD) {
@@ -1031,7 +1018,7 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 		i2c_priv->freq = MAX_CAPI_I2C_SPEED_FAST_PLUS;
 	} else {
 		ret = -EINVAL;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	ret = _max_capi_i2c_configure_hardware(i2c_priv, !config->initiator,
@@ -1048,24 +1035,14 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 			goto shutdown_i2c;
 	}
 
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto shutdown_i2c;
-	}
-
 	IRQn_Type i2c_irq = MXC_I3C_GET_IRQ(i2c_id);
 	ret = capi_irq_connect(i2c_irq, max_capi_i2c_isr, i2c_handle);
 	if (ret)
-		goto shutdown_i2c;
+		goto cleanup_channels;
 
 	ret = capi_irq_enable(i2c_irq);
 	if (ret)
-		goto shutdown_i2c;
+		goto cleanup_channels;
 
 	i2c[config->identifier] = i2c_handle;
 	*handle = i2c_handle;
@@ -1073,17 +1050,20 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 
 	return 0;
 
+cleanup_channels:
+	_max_capi_i2c_dma_cleanup_channel(&dma_channel_tx[i2c_id]);
+	_max_capi_i2c_dma_cleanup_channel(&dma_channel_rx[i2c_id]);
 shutdown_i2c:
 	MXC_I3C_Shutdown(MXC_I3C_GET_I3C(i2c_id));
 	if (i2c_priv->target) {
 		capi_free(i2c_priv->target);
 		i2c_priv->target = NULL;
 	}
-free_priv:
-	capi_free(i2c_priv);
 free_handle:
-	if (i2c_handle->init_allocated)
+	if (i2c_handle->init_allocated) {
+		capi_free(i2c_priv);
 		capi_free(i2c_handle);
+	}
 
 	i2c[config->identifier] = NULL;
 
@@ -1150,9 +1130,10 @@ int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 		i2c_priv->target = NULL;
 	}
 
-	capi_free(i2c_priv);
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(i2c_priv);
 		capi_free(handle);
+	}
 
 	i2c[i2c_id] = NULL;
 

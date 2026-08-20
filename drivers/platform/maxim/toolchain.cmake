@@ -141,12 +141,9 @@ if(OPENOCD_PATH)
         cmake_path(SET OPENOCD_SCRIPTS NORMALIZE "${MAXIM_LIBRARIES}/../Tools/OpenOCD/scripts")
     endif()
 
-    # Allow overriding the OpenOCD interface (default: CMSIS-DAP)
-    # Set OPENOCD_INTERFACE_TYPE=jlink to use J-Link instead
-    if(NOT DEFINED OPENOCD_INTERFACE_TYPE)
-        set(OPENOCD_INTERFACE_TYPE "cmsis-dap")
+    if(NOT DEFINED OPENOCD_INTERFACE)
+        set(OPENOCD_INTERFACE "interface/cmsis-dap.cfg")
     endif()
-    set(OPENOCD_INTERFACE "interface/${OPENOCD_INTERFACE_TYPE}.cfg")
     set(OPENOCD_CHIPNAME ${TARGET})
     set(OPENOCD_TARGETCFG "target/${TARGET}.cfg")
 
