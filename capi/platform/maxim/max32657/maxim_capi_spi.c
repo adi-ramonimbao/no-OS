@@ -28,15 +28,10 @@ void max_capi_spi_isr(void *handle);
 /** Static variables **********************************************************/
 
 static struct capi_spi_controller_handle *spi[MXC_SPI_INSTANCES] = {NULL};
-static volatile uint8_t dma_completed_count[MXC_SPI_INSTANCES] = {0};
-static struct capi_dma_chan *dma_channel_rx[MXC_SPI_INSTANCES] = {NULL};
-static struct capi_dma_chan *dma_channel_tx[MXC_SPI_INSTANCES] = {NULL};
 /* In capi_spi_transfer, if the transmit buffer is NULL, zeroes will be
    transmitted and if the receive buffer is NULL, the data is discarded */
 static uint8_t zero_tx[1] = {0};
 static uint8_t zero_rx[1];
-static bool transfer_in_progress[MXC_SPI_INSTANCES] = {false};
-static bool async_transfer_in_progress[MXC_SPI_INSTANCES] = {false};
 
 /** Helper functions **********************************************************/
 
@@ -291,7 +286,6 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 	struct max_capi_spi_priv *spi_priv;
 	struct max_capi_spi_fifo_async *fifo_async;
 	mxc_spi_regs_t *spi_reg;
-	uint8_t spi_id;
 	uint32_t tx_effective, rx_effective, clk_len;
 	uint32_t target_speed;
 	uint32_t inten;
@@ -301,17 +295,16 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 	spi_handle = device->controller;
 	spi_priv = spi_handle->priv;
 	spi_reg = MXC_SPI_GET_SPI(spi_priv->identifier);
-	spi_id = spi_priv->identifier;
 	fifo_async = &spi_priv->fifo_async;
 	timeout = transfer->timeout;
 
 	if (is_async) {
-		if (transfer_in_progress[spi_id])
+		if (spi_priv->transfer_in_progress)
 			return -EBUSY;
 	} else if (timeout == 0 || timeout == -1) {
-		while (transfer_in_progress[spi_id]);
+		while (spi_priv->transfer_in_progress);
 	} else {
-		while (transfer_in_progress[spi_id]) {
+		while (spi_priv->transfer_in_progress) {
 			timeout--;
 			if (timeout == 0) {
 				return -ETIMEDOUT;
@@ -319,17 +312,17 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 			capi_wait_ms(1);
 		}
 	}
-	transfer_in_progress[spi_id] = true;
+	spi_priv->transfer_in_progress = true;
 
 	/* Validate only one CS is chosen */
 	target_id = _max_capi_spi_get_cs_index(device->native_cs);
 	if (target_id < 0) {
-		transfer_in_progress[spi_id] = false;
+		spi_priv->transfer_in_progress = false;
 		return target_id;
 	}
 
 	if (device->max_speed_hz > spi_priv->clock_freq) {
-		transfer_in_progress[spi_id] = false;
+		spi_priv->transfer_in_progress = false;
 		return -EINVAL;
 	}
 
@@ -340,13 +333,13 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 	if (target_speed != spi_priv->clock_freq) {
 		ret = MXC_SPI_SetFrequency(spi_reg, target_speed);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return -EIO;
 		}
 	} else {
 		ret = MXC_SPI_SetFrequency(spi_reg, spi_priv->clock_freq);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return -EIO;
 		}
 	}
@@ -399,12 +392,12 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 		if (is_async && spi_priv->callback)
 			spi_priv->callback(CAPI_SPI_EVENT_XFR_DONE,
 					   spi_priv->callback_arg, 0);
-		transfer_in_progress[spi_id] = false;
+		spi_priv->transfer_in_progress = false;
 		return 0;
 	}
 
 	if (is_async) {
-		async_transfer_in_progress[spi_id] = true;
+		spi_priv->async_transfer_in_progress = true;
 		fifo_async->active = true;
 	}
 
@@ -467,7 +460,7 @@ int _max_capi_spi_transceive_fifo(struct capi_spi_device *device,
 	/* Disable the RX and TX FIFOs */
 	spi_reg->dma &= ~(MXC_F_SPI_DMA_RX_FIFO_EN | MXC_F_SPI_DMA_TX_FIFO_EN);
 
-	transfer_in_progress[spi_id] = false;
+	spi_priv->transfer_in_progress = false;
 
 	return 0;
 }
@@ -493,21 +486,17 @@ void _max_capi_spi_dma_cleanup_channel(struct capi_dma_chan **channel)
 void _max_capi_spi_dma_complete_callback(uint32_t event, void *ctx)
 {
 	struct max_capi_spi_priv *priv = ctx;
-	uint8_t spi_id = priv->identifier;
 
-	dma_completed_count[spi_id]++;
-	if (dma_completed_count[spi_id] == 2) {
+	priv->dma_completed_count++;
+	if (priv->dma_completed_count == 2) {
 		if (priv->callback) {
 			priv->callback(CAPI_SPI_EVENT_XFR_DONE,
 				       priv->callback_arg, 0);
 		}
 
-		dma_completed_count[spi_id] = 0;
-		async_transfer_in_progress[spi_id] = false;
-		transfer_in_progress[spi_id] = false;
-
-		// _max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
-		// _max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
+		priv->dma_completed_count = 0;
+		priv->async_transfer_in_progress = false;
+		priv->transfer_in_progress = false;
 	}
 }
 
@@ -530,7 +519,6 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	struct max_capi_dma_xfer_extra dma_transfer_tx_extra, dma_transfer_rx_extra;
 	struct capi_dma_transfer dma_transfer_tx, dma_transfer_rx;
 	mxc_spi_regs_t *spi_reg;
-	uint8_t spi_id;
 	uint32_t target_speed;
 	uint32_t rx_id, tx_id;
 	int timeout;
@@ -539,13 +527,12 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	spi_priv = spi_handle->priv;
 	spi_reg = MXC_SPI_GET_SPI(spi_priv->identifier);
 	dma_handle = spi_priv->dma_handle;
-	spi_id = spi_priv->identifier;
 	timeout = transfer->timeout;
 
 	if (timeout == 0 || timeout == -1) {
-		while (transfer_in_progress[spi_id]);
+		while (spi_priv->transfer_in_progress);
 	} else {
-		while (transfer_in_progress[spi_id]) {
+		while (spi_priv->transfer_in_progress) {
 			timeout--;
 			if (timeout == 0) {
 				return -ETIMEDOUT;
@@ -553,12 +540,12 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 			capi_wait_ms(1);
 		}
 	}
-	transfer_in_progress[spi_id] = true;
+	spi_priv->transfer_in_progress = true;
 
 	/* Validate only one CS is chosen */
 	target_id = _max_capi_spi_get_cs_index(device->native_cs);
 	if (target_id < 0) {
-		transfer_in_progress[spi_id] = false;
+		spi_priv->transfer_in_progress = false;
 		return target_id;
 	}
 
@@ -569,13 +556,13 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	if (target_speed != spi_priv->clock_freq) {
 		ret = MXC_SPI_SetFrequency(spi_reg, target_speed);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return -EIO;
 		}
 	} else {
 		ret = MXC_SPI_SetFrequency(spi_reg, spi_priv->clock_freq);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return -EIO;
 		}
 	}
@@ -604,27 +591,29 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	/* Allow DMA transfer for RX and TX SPI FIFOs */
 	spi_reg->dma |= MXC_F_SPI_DMA_RX_EN | MXC_F_SPI_DMA_TX_EN;
 
-	if (!dma_channel_rx[spi_id]) {
+	if (!spi_priv->dma_channel_rx) {
 		ret = _max_capi_spi_get_cs_index(device->native_cs);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return ret;
 		}
 		rx_id = ret;
-		ret = capi_dma_init_chan(dma_handle, &dma_channel_rx[spi_id], rx_id * 2);
+		ret = capi_dma_init_chan(dma_handle, &spi_priv->dma_channel_rx,
+					 rx_id * 2);
 		if (ret) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return ret;
 		}
 	}
-	if (!dma_channel_tx[spi_id]) {
+	if (!spi_priv->dma_channel_tx) {
 		ret = _max_capi_spi_get_cs_index(device->native_cs);
 		if (ret < 0) {
-			transfer_in_progress[spi_id] = false;
+			spi_priv->transfer_in_progress = false;
 			return ret;
 		}
 		tx_id = ret;
-		ret = capi_dma_init_chan(dma_handle, &dma_channel_tx[spi_id], tx_id * 2 + 1);
+		ret = capi_dma_init_chan(dma_handle, &spi_priv->dma_channel_tx,
+					 tx_id * 2 + 1);
 		if (ret)
 			goto deinit_rx_chan;
 	}
@@ -665,33 +654,33 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		.xfer_type = CAPI_DMA_MEM_TO_DEV,
 	};
 
-	dma_completed_count[spi_id] = 0;
+	spi_priv->dma_completed_count = 0;
 
-	ret = capi_dma_config_xfer(dma_channel_rx[spi_id], &dma_transfer_rx);
+	ret = capi_dma_config_xfer(spi_priv->dma_channel_rx, &dma_transfer_rx);
 	if (ret)
 		goto deinit_tx_chan;
-	ret = capi_dma_config_xfer(dma_channel_tx[spi_id], &dma_transfer_tx);
+	ret = capi_dma_config_xfer(spi_priv->dma_channel_tx, &dma_transfer_tx);
 	if (ret)
 		goto abort_transfer;
 
 	if (is_async) {
-		async_transfer_in_progress[spi_id] = true;
-		ret = capi_dma_register_complete_callback(dma_channel_rx[spi_id],
+		spi_priv->async_transfer_in_progress = true;
+		ret = capi_dma_register_complete_callback(spi_priv->dma_channel_rx,
 				_max_capi_spi_dma_complete_callback,
 				spi_priv);
 		if (ret)
 			goto abort_transfer;
-		ret = capi_dma_register_complete_callback(dma_channel_tx[spi_id],
+		ret = capi_dma_register_complete_callback(spi_priv->dma_channel_tx,
 				_max_capi_spi_dma_complete_callback,
 				spi_priv);
 		if (ret)
 			goto abort_transfer;
 	}
 
-	ret = capi_dma_xfer_start(dma_channel_rx[spi_id]);
+	ret = capi_dma_xfer_start(spi_priv->dma_channel_rx);
 	if (ret)
 		goto abort_transfer;
-	ret = capi_dma_xfer_start(dma_channel_tx[spi_id]);
+	ret = capi_dma_xfer_start(spi_priv->dma_channel_tx);
 	if (ret)
 		goto abort_transfer;
 
@@ -699,8 +688,8 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	MXC_SPI_StartTransmission(spi_reg);
 
 	if (!is_async) {
-		while (!capi_dma_chan_is_completed(dma_channel_rx[spi_id]) ||
-		       !capi_dma_chan_is_completed(dma_channel_tx[spi_id]));
+		while (!capi_dma_chan_is_completed(spi_priv->dma_channel_rx) ||
+		       !capi_dma_chan_is_completed(spi_priv->dma_channel_tx));
 
 		while (spi_reg->status & MXC_F_SPI_STATUS_BUSY);
 		/* End the transaction */
@@ -708,24 +697,24 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		/* Disable the RX and TX FIFOs */
 		spi_reg->dma &= ~(MXC_F_SPI_DMA_TX_FIFO_EN | MXC_F_SPI_DMA_RX_FIFO_EN);
 
-		transfer_in_progress[spi_id] = false;
+		spi_priv->transfer_in_progress = false;
 	}
 
 	return 0;
 
 abort_transfer:
 	if (is_async)
-		async_transfer_in_progress[spi_id] = false;
-	capi_dma_xfer_abort(dma_channel_tx[spi_id]);
-	capi_dma_xfer_abort(dma_channel_rx[spi_id]);
+		spi_priv->async_transfer_in_progress = false;
+	capi_dma_xfer_abort(spi_priv->dma_channel_tx);
+	capi_dma_xfer_abort(spi_priv->dma_channel_rx);
 deinit_tx_chan:
-	capi_dma_deinit_chan(dma_channel_tx[spi_id]);
-	dma_channel_tx[spi_id] = NULL;
+	capi_dma_deinit_chan(spi_priv->dma_channel_tx);
+	spi_priv->dma_channel_tx = NULL;
 deinit_rx_chan:
-	capi_dma_deinit_chan(dma_channel_rx[spi_id]);
-	dma_channel_rx[spi_id] = NULL;
+	capi_dma_deinit_chan(spi_priv->dma_channel_rx);
+	spi_priv->dma_channel_rx = NULL;
 
-	transfer_in_progress[spi_id] = false;
+	spi_priv->transfer_in_progress = false;
 
 	return ret;
 }
@@ -783,6 +772,12 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	spi_handle->ops = config->ops;
 	spi_priv->identifier = config->identifier;
 	spi_priv->clock_freq = config->clk_freq_hz;
+	spi_priv->transfer_in_progress = false;
+	spi_priv->async_transfer_in_progress = false;
+	spi_priv->dma_completed_count = 0;
+	spi_priv->dma_channel_rx = NULL;
+	spi_priv->dma_channel_tx = NULL;
+	spi_priv->fifo_async.active = false;
 	spi_id = spi_priv->identifier;
 
 	/* Copy user config or set defaults */
@@ -831,8 +826,8 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	return 0;
 
 deinit_dma:
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_rx);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_tx);
 shutdown_spi:
 	MXC_SPI_Shutdown(MXC_SPI_GET_SPI(spi_id));
 
@@ -842,9 +837,6 @@ shutdown_spi:
 	}
 
 	spi[config->identifier] = NULL;
-	dma_completed_count[config->identifier] = 0;
-	async_transfer_in_progress[config->identifier] = false;
-	transfer_in_progress[config->identifier] = false;
 
 	return ret;
 }
@@ -870,12 +862,12 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 	if (ret != E_NO_ERROR)
 		return -EIO;
 
-	dma_completed_count[spi_id] = 0;
-	async_transfer_in_progress[spi_id] = false;
-	transfer_in_progress[spi_id] = false;
+	spi_priv->dma_completed_count = 0;
+	spi_priv->async_transfer_in_progress = false;
+	spi_priv->transfer_in_progress = false;
 
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_rx);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_tx);
 
 	capi_irq_disable(MXC_SPI_GET_IRQ(spi_id));
 
@@ -1007,7 +999,7 @@ int max_capi_spi_read_command_async(struct capi_spi_device *device,
  */
 int max_capi_spi_abort_async(struct capi_spi_device *device)
 {
-	const struct max_capi_spi_priv *spi_priv;
+	struct max_capi_spi_priv *spi_priv;
 	struct max_capi_spi_fifo_async *fifo_async;
 	uint8_t spi_id;
 	mxc_spi_regs_t *spi_reg;
@@ -1020,8 +1012,8 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
 	spi_reg = MXC_SPI_GET_SPI(spi_id);
 	fifo_async = &((struct max_capi_spi_priv *)spi_priv)->fifo_async;
 
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
-	_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_rx);
+	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_tx);
 
 	spi_reg->inten &= ~(MXC_F_SPI_INTEN_TX_THD |
 			    MXC_F_SPI_INTEN_RX_THD |
@@ -1032,9 +1024,9 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
 	spi_reg->dma &= ~(MXC_F_SPI_DMA_RX_FIFO_EN | MXC_F_SPI_DMA_TX_FIFO_EN);
 	spi_reg->dma &= ~(MXC_F_SPI_DMA_RX_EN | MXC_F_SPI_DMA_TX_EN);
 
-	dma_completed_count[spi_id] = 0;
-	async_transfer_in_progress[spi_id] = false;
-	transfer_in_progress[spi_id] = false;
+	spi_priv->dma_completed_count = 0;
+	spi_priv->async_transfer_in_progress = false;
+	spi_priv->transfer_in_progress = false;
 
 	if (spi_priv->callback)
 		spi_priv->callback(CAPI_SPI_EVENT_ERROR,
@@ -1152,8 +1144,8 @@ void max_capi_spi_isr(void *handle)
 			spi_reg->dma &= ~(MXC_F_SPI_DMA_RX_FIFO_EN |
 					  MXC_F_SPI_DMA_TX_FIFO_EN);
 			fifo_async->active = false;
-			async_transfer_in_progress[spi_id] = false;
-			transfer_in_progress[spi_id] = false;
+			spi_priv->async_transfer_in_progress = false;
+			spi_priv->transfer_in_progress = false;
 			if (spi_priv->callback)
 				spi_priv->callback(CAPI_SPI_EVENT_XFR_DONE,
 						   spi_priv->callback_arg, 0);
@@ -1180,13 +1172,13 @@ void max_capi_spi_isr(void *handle)
 		}
 	}
 
-	if (has_error && async_transfer_in_progress[spi_id]) {
-		_max_capi_spi_dma_cleanup_channel(&dma_channel_rx[spi_id]);
-		_max_capi_spi_dma_cleanup_channel(&dma_channel_tx[spi_id]);
+	if (has_error && spi_priv->async_transfer_in_progress) {
+		_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_rx);
+		_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_tx);
 
-		dma_completed_count[spi_id] = 0;
-		async_transfer_in_progress[spi_id] = false;
-		transfer_in_progress[spi_id] = false;
+		spi_priv->dma_completed_count = 0;
+		spi_priv->async_transfer_in_progress = false;
+		spi_priv->transfer_in_progress = false;
 
 		spi_reg->ctrl0 &= ~MXC_F_SPI_CTRL0_START;
 		spi_reg->dma &= ~(MXC_F_SPI_DMA_RX_FIFO_EN | MXC_F_SPI_DMA_TX_FIFO_EN);

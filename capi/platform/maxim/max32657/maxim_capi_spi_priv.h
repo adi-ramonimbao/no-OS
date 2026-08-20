@@ -15,7 +15,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include "maxim_capi_spi_priv.h"
+#include "maxim_capi_spi.h"
 
 /**
  * @struct max_capi_spi_fifo_async
@@ -63,6 +63,17 @@ struct max_capi_spi_priv {
 	void *callback_arg;
 	/** FIFO async */
 	struct max_capi_spi_fifo_async fifo_async;
+	/** DMA completion count */
+	volatile uint8_t dma_completed_count;
+	/** RX DMA channel */
+	struct capi_dma_chan *dma_channel_rx;
+	/** TX DMA channel */
+	struct capi_dma_chan *dma_channel_tx;
+	/** Transfer in progress flag */
+	volatile bool transfer_in_progress;
+	/** Async transfer in progress flag */
+	volatile bool async_transfer_in_progress;
+
 };
 
 #define CAPI_SPI_HANDLE_MAXIM_INIT()			\
