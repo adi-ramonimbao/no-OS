@@ -22,10 +22,6 @@
 /** Static variables **********************************************************/
 
 static struct capi_i2c_controller_handle *i2c[MXC_CFG_I3C_INSTANCES] = {NULL};
-static volatile bool dma_completed[MXC_CFG_I3C_INSTANCES] = {false};
-static struct capi_dma_chan *dma_channel_rx[MXC_CFG_I3C_INSTANCES];
-static struct capi_dma_chan *dma_channel_tx[MXC_CFG_I3C_INSTANCES];
-static bool async_transfer_in_progress[MXC_CFG_I3C_INSTANCES] = {false};
 
 /** Forward declarations ******************************************************/
 
@@ -528,17 +524,17 @@ static void _max_capi_i2c_dma_complete_callback(uint32_t event, void *ctx)
 	callback = i2c_priv->callback;
 	callback_arg = i2c_priv->callback_arg;
 
-	dma_completed[i2c_id] = true;
+	i2c_priv->dma_completed = true;
 	MXC_I3C_Controller_EnableInt(i3c, MXC_F_I3C_CONT_INTEN_DONE);
 
 	if (i2c_priv->async->send_stop)
 		MXC_I3C_EmitI2CStop(i3c);
 
-	_max_capi_i2c_dma_cleanup_channel(&dma_channel_rx[i2c_id]);
-	_max_capi_i2c_dma_cleanup_channel(&dma_channel_tx[i2c_id]);
+	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_rx);
+	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_tx);
 
-	dma_completed[i2c_id] = false;
-	async_transfer_in_progress[i2c_id] = false;
+	i2c_priv->dma_completed = false;
+	i2c_priv->async_transfer_in_progress = false;
 
 	if (i2c_priv->async->dma_allocated_buffer) {
 		capi_free(i2c_priv->async->dma_allocated_buffer);
@@ -566,22 +562,21 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 {
 	int ret;
 	struct capi_dma_handle *dma_handle = i2c_priv->dma_handle;
-	uint8_t i2c_id = i2c_priv->identifier;
 	uint8_t *tx_buffer;
 	uint16_t tx_len;
 	struct max_capi_dma_xfer_extra dma_tx_extra;
 	struct capi_dma_transfer dma_tx_xfer;
 
-	if (async_transfer_in_progress[i2c_id])
+	if (i2c_priv->async_transfer_in_progress)
 		return -EBUSY;
 
-	async_transfer_in_progress[i2c_id] = true;
+	i2c_priv->async_transfer_in_progress = true;
 
 	if (async->subaddr_buf) {
 		tx_len = async->subaddr_len + async->data_len;
 		tx_buffer = capi_malloc(tx_len);
 		if (!tx_buffer) {
-			async_transfer_in_progress[i2c_id] = false;
+			i2c_priv->async_transfer_in_progress = false;
 			return -ENOMEM;
 		}
 		memcpy(tx_buffer, async->subaddr_buf, async->subaddr_len);
@@ -600,13 +595,13 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 	if (ret != E_SUCCESS) {
 		if (tx_buffer != async->data_buf)
 			capi_free(tx_buffer);
-		async_transfer_in_progress[i2c_id] = false;
+		i2c_priv->async_transfer_in_progress = false;
 		return -EIO;
 	}
 
 	i3c->cont_dmactrl = MXC_S_I3C_CONT_DMACTRL_TX_EN_EN;
 
-	ret = capi_dma_init_chan(dma_handle, &dma_channel_tx[i2c_id], 0);
+	ret = capi_dma_init_chan(dma_handle, &i2c_priv->dma_channel_tx, 0);
 	if (ret)
 		goto error_cleanup;
 
@@ -627,28 +622,28 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 		.user_data = i2c_priv,
 	};
 
-	ret = capi_dma_config_xfer(dma_channel_tx[i2c_id], &dma_tx_xfer);
+	ret = capi_dma_config_xfer(i2c_priv->dma_channel_tx, &dma_tx_xfer);
 	if (ret)
 		goto error_deinit_tx;
 
-	ret = capi_dma_register_complete_callback(dma_channel_tx[i2c_id],
+	ret = capi_dma_register_complete_callback(i2c_priv->dma_channel_tx,
 			_max_capi_i2c_dma_complete_callback,
 			i2c_priv);
 
-	dma_completed[i2c_id] = false;
+	i2c_priv->dma_completed = false;
 
-	ret = capi_dma_xfer_start(dma_channel_tx[i2c_id]);
+	ret = capi_dma_xfer_start(i2c_priv->dma_channel_tx);
 	if (ret)
 		goto error_deinit_tx;
 
 	return 0;
 
 error_deinit_tx:
-	capi_dma_deinit_chan(dma_channel_tx[i2c_id]);
+	capi_dma_deinit_chan(i2c_priv->dma_channel_tx);
 error_cleanup:
 	if (tx_buffer != async->data_buf)
 		capi_free(tx_buffer);
-	async_transfer_in_progress[i2c_id] = false;
+	i2c_priv->async_transfer_in_progress = false;
 
 	return ret;
 }
@@ -666,14 +661,13 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 {
 	int ret;
 	struct capi_dma_handle *dma_handle = i2c_priv->dma_handle;
-	uint8_t i2c_id = i2c_priv->identifier;
 	struct max_capi_dma_xfer_extra dma_rx_extra;
 	struct capi_dma_transfer dma_rx_xfer;
 	uint16_t i;
 	bool is_last;
 	uint32_t timeout = MAX_CAPI_I2C_DMA_TIMEOUT;
 
-	if (async_transfer_in_progress[i2c_id])
+	if (i2c_priv->async_transfer_in_progress)
 		return -EBUSY;
 
 	async->state = MAX_CAPI_I2C_ASYNC_STATE_RX_DATA;
@@ -682,7 +676,7 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 		ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_WRITE,
 					async->target_addr, 0);
 		if (ret != E_SUCCESS) {
-			async_transfer_in_progress[i2c_id] = false;
+			i2c_priv->async_transfer_in_progress = false;
 			return -EIO;
 		}
 
@@ -691,7 +685,7 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 			ret = MXC_I3C_WriteTXFIFO(i3c, &async->subaddr_buf[i],
 						  1, is_last, 0);
 			if (ret <= 0) {
-				async_transfer_in_progress[i2c_id] = false;
+				i2c_priv->async_transfer_in_progress = false;
 				return -EIO;
 			}
 		}
@@ -705,13 +699,13 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 	ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_READ,
 				async->target_addr, async->data_len);
 	if (ret != E_SUCCESS) {
-		async_transfer_in_progress[i2c_id] = false;
+		i2c_priv->async_transfer_in_progress = false;
 		return -EIO;
 	}
 
 	i3c->cont_dmactrl = MXC_S_I3C_CONT_DMACTRL_RX_EN_EN;
 
-	ret = capi_dma_init_chan(dma_handle, &dma_channel_rx[i2c_id], 0);
+	ret = capi_dma_init_chan(dma_handle, &i2c_priv->dma_channel_rx, 0);
 	if (ret)
 		goto error_cleanup;
 
@@ -732,28 +726,28 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 		.user_data = i2c_priv,
 	};
 
-	ret = capi_dma_config_xfer(dma_channel_rx[i2c_id], &dma_rx_xfer);
+	ret = capi_dma_config_xfer(i2c_priv->dma_channel_rx, &dma_rx_xfer);
 	if (ret)
 		goto error_deinit_rx;
 
-	ret = capi_dma_register_complete_callback(dma_channel_rx[i2c_id],
+	ret = capi_dma_register_complete_callback(i2c_priv->dma_channel_rx,
 			_max_capi_i2c_dma_complete_callback,
 			i2c_priv);
 	if (ret)
 		goto error_deinit_rx;
 
-	dma_completed[i2c_id] = false;
+	i2c_priv->dma_completed = false;
 
-	ret = capi_dma_xfer_start(dma_channel_rx[i2c_id]);
+	ret = capi_dma_xfer_start(i2c_priv->dma_channel_rx);
 	if (ret)
 		goto error_deinit_rx;
 
 	return 0;
 
 error_deinit_rx:
-	capi_dma_deinit_chan(dma_channel_rx[i2c_id]);
+	capi_dma_deinit_chan(i2c_priv->dma_channel_rx);
 error_cleanup:
-	async_transfer_in_progress[i2c_id] = false;
+	i2c_priv->async_transfer_in_progress = false;
 
 	return ret;
 }
@@ -1051,8 +1045,8 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	return 0;
 
 cleanup_channels:
-	_max_capi_i2c_dma_cleanup_channel(&dma_channel_tx[i2c_id]);
-	_max_capi_i2c_dma_cleanup_channel(&dma_channel_rx[i2c_id]);
+	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_tx);
+	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_rx);
 shutdown_i2c:
 	MXC_I3C_Shutdown(MXC_I3C_GET_I3C(i2c_id));
 	if (i2c_priv->target) {
@@ -1096,10 +1090,10 @@ int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 
 	if (i2c_priv->async) {
 		if (i2c_priv->async->state != MAX_CAPI_I2C_ASYNC_STATE_IDLE) {
-			if (dma_channel_rx[i2c_id])
-				capi_dma_xfer_abort(dma_channel_rx[i2c_id]);
-			if (dma_channel_tx[i2c_id])
-				capi_dma_xfer_abort(dma_channel_tx[i2c_id]);
+			if (i2c_priv->dma_channel_rx)
+				capi_dma_xfer_abort(i2c_priv->dma_channel_rx);
+			if (i2c_priv->dma_channel_tx)
+				capi_dma_xfer_abort(i2c_priv->dma_channel_tx);
 
 			uint32_t timeout = MAX_CAPI_I2C_DMA_CALLBACK_CLEANUP_TIMEOUT;
 			while (i2c_priv->callback_active && --timeout);
@@ -1115,10 +1109,10 @@ int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 	}
 
 	if (i2c_priv->dma_handle) {
-		_max_capi_i2c_dma_cleanup_channel(&dma_channel_rx[i2c_id]);
-		_max_capi_i2c_dma_cleanup_channel(&dma_channel_tx[i2c_id]);
-		dma_completed[i2c_id] = false;
-		async_transfer_in_progress[i2c_id] = false;
+		_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_rx);
+		_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_tx);
+		i2c_priv->dma_completed = false;
+		i2c_priv->async_transfer_in_progress = false;
 	}
 
 	capi_irq_disable(MXC_I3C_GET_IRQ(i2c_id));

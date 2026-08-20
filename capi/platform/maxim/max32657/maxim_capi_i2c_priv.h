@@ -136,6 +136,15 @@ struct max_capi_i2c_priv {
 	struct max_capi_i2c_target_state *target;
 	/** Async state */
 	struct max_capi_i2c_async_state *async;
+	/** DMA completion flag */
+	volatile bool dma_completed;
+	/** TX DMA channel */
+	struct capi_dma_chan *dma_channel_tx;
+	/** RX DMA channel */
+	struct capi_dma_chan *dma_channel_rx;
+	/** Async transfer flag */
+	volatile bool async_transfer_in_progress;
+
 };
 
 #define CAPI_I2C_CONTROLLER_HANDLE_MAXIM_INIT()		\
