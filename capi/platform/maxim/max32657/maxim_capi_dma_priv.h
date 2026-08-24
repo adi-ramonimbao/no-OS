@@ -1,5 +1,5 @@
 /*******************************************************************************
- *   @file   maxim_capi_dma.h
+ *   @file   maxim_capi_dma_priv.h
  *   @brief  Header file for the DMA private handle
  *   @author Ramon Miguel Imbao (ramonmiguel.imbao@analog.com)
 ********************************************************************************

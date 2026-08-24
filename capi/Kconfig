@@ -51,4 +51,12 @@ config CAPI_WDT
 	bool "CAPI WDT"
 	default n
 
+config CAPI_RTC
+	bool "CAPI RTC"
+	default n
+
+config CAPI_TRNG
+	bool "CAPI TRNG"
+	default n
+
 endif # CAPI

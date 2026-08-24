@@ -11,8 +11,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <errno.h>
+#include "capi_alloc.h"
 #include "maxim_capi_irq.h"
 #include "maxim_capi_rtc.h"
+#include "maxim_capi_rtc_priv.h"
 #include "rtc.h"
 
 /** Static variables **********************************************************/
@@ -32,7 +34,7 @@ void max_capi_rtc_isr(void *handle);
  * @return 0 on success, negative error code otherwise
  */
 int max_capi_rtc_init(struct capi_rtc_handle **handle,
-		      struct capi_rtc_config *config)
+		      const struct capi_rtc_config *config)
 {
 	int ret;
 	struct capi_rtc_handle *rtc_handle;
@@ -55,22 +57,29 @@ int max_capi_rtc_init(struct capi_rtc_handle **handle,
 		rtc_handle = capi_calloc(1, sizeof(*rtc_handle));
 		if (!rtc_handle)
 			return -ENOMEM;
+
+		rtc_priv = capi_calloc(1, sizeof(*rtc_priv));
+		if (!rtc_priv) {
+			capi_free(rtc_handle);
+			return -ENOMEM;
+		}
+
 		rtc_handle->init_allocated = true;
 	} else {
 		rtc_handle = *handle;
-		rtc_handle->init_allocated = false;
-	}
 
-	rtc_priv = capi_calloc(1, sizeof(*rtc_priv));
-	if (!rtc_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
+		if (!rtc_handle->priv)
+			return -EINVAL;
+
+		rtc_priv = rtc_handle->priv;
+
+		rtc_handle->init_allocated = false;
 	}
 
 	ret = MXC_RTC_Init(config->initial_sec, config->initial_subsec);
 	if (ret) {
 		ret = -EIO;
-		goto free_priv;
+		goto free_handle;
 	}
 
 	rtc_priv->freq = config->freq ? config->freq : 32768;
@@ -92,41 +101,33 @@ int max_capi_rtc_init(struct capi_rtc_handle **handle,
 	}
 
 	rtc_handle->ops = config->ops;
-	rtc_handle->priv = rtc_priv;
-
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto free_priv;
-	}
 
 	ret = capi_irq_connect(RTC_IRQn, max_capi_rtc_isr, rtc_handle);
 	if (ret)
-		goto free_priv;
+		goto reset_rtc;
 
 	ret = capi_irq_set_priority(RTC_IRQn, config->irq_priority);
 	if (ret)
-		goto free_priv;
+		goto reset_rtc;
 
 	ret = capi_irq_enable(RTC_IRQn);
 	if (ret)
-		goto free_priv;
+		goto reset_rtc;
 
 	rtc = rtc_handle;
 	*handle = rtc_handle;
 
 	return 0;
 
-free_priv:
-	capi_free(rtc_priv);
+reset_rtc:
+	MXC_RTC_DisableInt(MXC_RTC_INT_EN_LONG | MXC_RTC_INT_EN_SHORT |
+			   MXC_RTC_INT_EN_READY);
+	MXC_RTC_Stop();
 free_handle:
-	if (rtc_handle->init_allocated)
+	if (rtc_handle->init_allocated) {
+		capi_free(rtc_priv);
 		capi_free(rtc_handle);
+	}
 
 	rtc = NULL;
 
@@ -158,10 +159,10 @@ int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
 
 	ret = MXC_RTC_Stop();
 
-	capi_free(rtc_priv);
-
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(rtc_priv);
 		capi_free(handle);
+	}
 
 	rtc = NULL;
 
@@ -316,6 +317,8 @@ int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
 			   enum capi_rtc_alarm_type type,
 			   const void *alarm_value)
 {
+	const struct capi_rtc_time *alarm;
+	const uint32_t *subsec;
 	int ret;
 
 	if (!handle || !alarm_value)
@@ -323,7 +326,7 @@ int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
 
 	switch (type) {
 	case CAPI_RTC_ALARM_TIME:
-		const struct capi_rtc_time *alarm = alarm_value;
+		alarm = alarm_value;
 
 		if (alarm->sec > MXC_F_RTC_TODA_TOD_ALARM)
 			return -EINVAL;
@@ -335,9 +338,9 @@ int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
 		return 0;
 
 	case CAPI_RTC_ALARM_SUBSEC:
-		const uint32_t *subsec = alarm_value;
+		subsec = alarm_value;
 
-		ret = MXC_RTC_SetSubsecondAlarm(subsec);
+		ret = MXC_RTC_SetSubsecondAlarm(*subsec);
 		if (ret != E_NO_ERROR)
 			return -EIO;
 
@@ -495,13 +498,12 @@ int max_capi_rtc_register_callback(struct capi_rtc_handle *handle,
 }
 
 /**
- * @brief Enable RTC events
+ * @brief Enable an RTC event
  * @param handle The RTC handle
- * @param events_mask Bitmask of events to enable
+ * @param event Event to enable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_enable_events(struct capi_rtc_handle *handle,
-			       uint32_t events_mask)
+int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -512,30 +514,31 @@ int max_capi_rtc_enable_events(struct capi_rtc_handle *handle,
 
 	rtc_priv = handle->priv;
 
-	if (events_mask & (1 << CAPI_RTC_EVENT_ALARM))
+	if (event == CAPI_RTC_EVENT_ALARM)
 		msdk_mask |= MXC_RTC_INT_EN_LONG;
-	if (events_mask & (1 << CAPI_RTC_EVENT_SUBSEC_ALARM))
+	else if (event == CAPI_RTC_EVENT_SUBSEC_ALARM)
 		msdk_mask |= MXC_RTC_INT_EN_SHORT;
-	if (events_mask & (1 << CAPI_RTC_EVENT_READY))
+	else if (event == CAPI_RTC_EVENT_READY)
 		msdk_mask |= MXC_RTC_INT_EN_READY;
+	else
+		return -EINVAL;
 
 	ret = MXC_RTC_EnableInt(msdk_mask);
 	if (ret != E_NO_ERROR)
 		return -EIO;
 
-	rtc_priv->events_enabled |= events_mask;
+	rtc_priv->events_enabled |= (1U << event);
 
 	return 0;
 }
 
 /**
- * @brief Disable RTC events
+ * @brief Disable an RTC event
  * @param handle The RTC handle
- * @param events_mask Bitmask of events to disable
+ * @param event Event to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_disable_events(struct capi_rtc_handle *handle,
-				uint32_t events_mask)
+int max_capi_rtc_disable_event(struct capi_rtc_handle *handle, uint32_t event)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -546,18 +549,20 @@ int max_capi_rtc_disable_events(struct capi_rtc_handle *handle,
 
 	rtc_priv = handle->priv;
 
-	if (events_mask & (1 << CAPI_RTC_EVENT_ALARM))
+	if (event == CAPI_RTC_EVENT_ALARM)
 		msdk_mask |= MXC_RTC_INT_EN_LONG;
-	if (events_mask & (1 << CAPI_RTC_EVENT_SUBSEC_ALARM))
+	else if (event == CAPI_RTC_EVENT_SUBSEC_ALARM)
 		msdk_mask |= MXC_RTC_INT_EN_SHORT;
-	if (events_mask & (1 << CAPI_RTC_EVENT_READY))
+	else if (event == CAPI_RTC_EVENT_READY)
 		msdk_mask |= MXC_RTC_INT_EN_READY;
+	else
+		return -EINVAL;
 
 	ret = MXC_RTC_DisableInt(msdk_mask);
 	if (ret != E_NO_ERROR)
 		return -EIO;
 
-	rtc_priv->events_enabled &= ~events_mask;
+	rtc_priv->events_enabled &= ~(1U << event);
 
 	return 0;
 }
@@ -605,7 +610,7 @@ void max_capi_rtc_isr(void *handle)
 	}
 }
 
-struct capi_rtc_ops max_capi_rtc_ops = {
+const struct capi_rtc_ops max_capi_rtc_ops = {
 	.init = max_capi_rtc_init,
 	.deinit = max_capi_rtc_deinit,
 	.start = max_capi_rtc_start,
@@ -620,7 +625,7 @@ struct capi_rtc_ops max_capi_rtc_ops = {
 	.sqwave_disable = max_capi_rtc_sqwave_disable,
 	.trim = max_capi_rtc_trim,
 	.register_callback = max_capi_rtc_register_callback,
-	.enable_events = max_capi_rtc_enable_events,
-	.disable_events = max_capi_rtc_disable_events,
+	.enable_event = max_capi_rtc_enable_event,
+	.disable_event = max_capi_rtc_disable_event,
 	.isr = max_capi_rtc_isr,
 };

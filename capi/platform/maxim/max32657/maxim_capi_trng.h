@@ -11,16 +11,17 @@
 #ifndef MAXIM_CAPI_TRNG_H_
 #define MAXIM_CAPI_TRNG_H_
 
+#if defined(__cplusplus)
+extern "C" {
+#endif /* __cplusplus */
+
 #include "capi_trng.h"
 #include "capi_irq.h"
 
-struct max_capi_trng_priv {
-	/** Callback function for async */
-	capi_trng_callback_t callback;
-	/** Callback argument for async */
-	void *callback_arg;
-};
-
 extern const struct capi_trng_ops max_capi_trng_ops;
+
+#if defined(__cplusplus)
+}
+#endif /* __cplusplus */
 
 #endif /* MAXIM_CAPI_TRNG_H_ */

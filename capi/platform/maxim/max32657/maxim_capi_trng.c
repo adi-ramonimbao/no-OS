@@ -11,7 +11,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "capi_trng.h"
+#include "capi_alloc.h"
 #include "maxim_capi_trng.h"
+#include "maxim_capi_trng_priv.h"
 #include "maxim_capi_irq.h"
 #include "trng.h"
 #include "max32657.h"
@@ -40,6 +42,7 @@ static void _max_capi_trng_msdk_callback(void *req, int result)
 		return;
 
 	trng_priv = trng->priv;
+	trng_priv->busy = false;
 
 	if (trng_priv->callback) {
 		event = (result == E_NO_ERROR)
@@ -79,59 +82,59 @@ int max_capi_trng_init(struct capi_trng_handle **handle,
 		trng_handle = capi_calloc(1, sizeof(*trng_handle));
 		if (!trng_handle)
 			return -ENOMEM;
+
+		trng_priv = capi_calloc(1, sizeof(*trng_priv));
+		if (!trng_priv) {
+			capi_free(trng_handle);
+			return -ENOMEM;
+		}
+
 		trng_handle->init_allocated = true;
 	} else {
 		trng_handle = *handle;
+
+		if (!trng_handle->priv)
+			return -EINVAL;
+
+		trng_priv = trng_handle->priv;
+
 		trng_handle->init_allocated = false;
 	}
 
-	trng_priv = capi_calloc(1, sizeof(*trng_priv));
-	if (!trng_priv) {
-		ret = -ENOMEM;
-		goto free_handle;
-	}
-
 	trng_handle->priv = trng_priv;
+	trng_priv->busy = false;
+	trng_priv->callback = NULL;
+	trng_priv->callback_arg = NULL;
 	trng_handle->ops = config->ops;
 
 	ret = MXC_TRNG_Init();
 	if (ret)
-		goto free_priv;
-
-	struct capi_irq_config irq_config = {
-		.irq_ctrl_id = 0,
-	};
-
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY) {
-		/* -EBUSY means IRQ already initialized, which is fine since
-		   it uses a singleton pattern. */
-		goto free_priv;
-	}
+		goto free_handle;
 
 	ret = capi_irq_connect(TRNG_IRQn, max_capi_trng_isr, trng_handle);
 	if (ret)
-		goto free_priv;
+		goto shutdown_trng;
 
 	ret = capi_irq_set_priority(TRNG_IRQn, config->irq_priority);
 	if (ret)
-		goto free_priv;
+		goto shutdown_trng;
 
 	ret = capi_irq_enable(TRNG_IRQn);
 	if (ret)
-		goto free_priv;
+		goto shutdown_trng;
 
 	trng = trng_handle;
 	*handle = trng_handle;
 
 	return 0;
 
-free_priv:
+shutdown_trng:
 	MXC_TRNG_Shutdown();
-	capi_free(trng_priv);
 free_handle:
-	if (trng_handle->init_allocated)
+	if (trng_handle->init_allocated) {
+		capi_free(trng_priv);
 		capi_free(trng_handle);
+	}
 
 	trng = NULL;
 
@@ -146,21 +149,22 @@ free_handle:
 int max_capi_trng_deinit(struct capi_trng_handle *handle)
 {
 	int ret;
-	struct max_capi_trng_priv *trng_priv;
 
 	if (!handle || !handle->priv)
 		return -EINVAL;
 
-	trng_priv = handle->priv;
+	if (handle != trng)
+		return -EINVAL;
 
 	capi_irq_disable(TRNG_IRQn);
+	MXC_TRNG_DisableInt();
 
 	ret = MXC_TRNG_Shutdown();
 
-	capi_free(handle->priv);
-
-	if (handle->init_allocated)
+	if (handle->init_allocated) {
+		capi_free(handle->priv);
 		capi_free(handle);
+	}
 
 	trng = NULL;
 
@@ -218,13 +222,72 @@ int max_capi_trng_fill_buffer(struct capi_trng_handle *handle, uint8_t *buffer,
 int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
 				    uint8_t *buffer, uint32_t length)
 {
+	struct max_capi_trng_priv *trng_priv;
+
 	if (!handle || !handle->priv || !buffer)
 		return -EINVAL;
 
 	if (length == 0)
 		return -EINVAL;
 
+	trng_priv = handle->priv;
+
+	if (trng_priv->busy)
+		return -EBUSY;
+
+	trng_priv->busy = true;
 	MXC_TRNG_RandomAsync(buffer, length, _max_capi_trng_msdk_callback);
+
+	return 0;
+}
+
+/**
+ * @brief Abort the async fill operation
+ * @param handle The TRNG handle
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_trng_abort_async(struct capi_trng_handle *handle)
+{
+	struct max_capi_trng_priv *trng_priv;
+
+	if (!handle || !handle->priv)
+		return -EINVAL;
+
+	trng_priv = handle->priv;
+
+	capi_irq_disable(TRNG_IRQn);
+	if (!trng_priv->busy) {
+		capi_irq_enable(TRNG_IRQn);
+		return 0;
+	}
+
+	MXC_TRNG_DisableInt();
+	capi_irq_clear_pending(TRNG_IRQn);
+	trng_priv->busy = false;
+	capi_irq_enable(TRNG_IRQn);
+
+	if (trng_priv->callback)
+		trng_priv->callback(CAPI_TRNG_EVENT_ABORTED,
+				    trng_priv->callback_arg, 0);
+
+	return 0;
+}
+
+/**
+ * @brief Check whether the TRNG is busy or not
+ * @param handle The TRNG handle
+ * @param is_busy True if TRNG in progress, False if not
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_trng_is_busy(struct capi_trng_handle *handle, bool *is_busy)
+{
+	struct max_capi_trng_priv *trng_priv;
+
+	if (!handle || !handle->priv || !is_busy)
+		return -EINVAL;
+
+	trng_priv = handle->priv;
+	*is_busy = trng_priv->busy;
 
 	return 0;
 }
@@ -292,6 +355,8 @@ const struct capi_trng_ops max_capi_trng_ops = {
 	.generate_u32 = max_capi_trng_generate_u32,
 	.fill_buffer = max_capi_trng_fill_buffer,
 	.fill_buffer_async = max_capi_trng_fill_buffer_async,
+	.abort_async = max_capi_trng_abort_async,
+	.is_busy = max_capi_trng_is_busy,
 	.register_callback = max_capi_trng_register_callback,
 	.health_test = max_capi_trng_health_test,
 	.isr = max_capi_trng_isr,
