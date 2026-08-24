@@ -161,7 +161,7 @@ int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
 	struct max_capi_gpio_port_priv *priv;
 	mxc_gpio_cfg_t gpio_config;
 
-	if (!handle)
+	if (!handle || !handle->priv)
 		return -EINVAL;
 
 	priv = handle->priv;
@@ -178,7 +178,8 @@ int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
 	gpio_config.func = MXC_GPIO_FUNC_OUT;
 	gpio_config.mask = ~direction_bitmask & priv->pin_mask;
 	MXC_GPIO_Config(&gpio_config);
-	_max_capi_gpio_set_enable(priv->port, ~direction_bitmask & priv->pin_mask, true);
+	_max_capi_gpio_set_enable(priv->port, ~direction_bitmask & priv->pin_mask,
+				  true);
 	MXC_GPIO_OutClr(priv->port, ~direction_bitmask & priv->pin_mask);
 
 	/* Set the input pins */

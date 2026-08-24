@@ -270,7 +270,7 @@ int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 	struct max_capi_dma_priv *dma_priv;
 	struct max_capi_dma_ch_priv *ch_priv;
 
-	if (!chan || !chan->handle || !chan->handle->priv)
+	if (!chan || !chan->handle || !chan->handle->priv || !chan->extra)
 		return -EINVAL;
 
 	dma_priv = chan->handle->priv;
@@ -309,7 +309,7 @@ int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
 	mxc_dma_srcdst_t srcdst;
 	mxc_dma_width_t srcwd, dstwd;
 
-	if (!chan || !xfer || !xfer->extra)
+	if (!chan || !xfer || !xfer->extra || !chan->extra)
 		return -EINVAL;
 
 	xfer_extra = xfer->extra;

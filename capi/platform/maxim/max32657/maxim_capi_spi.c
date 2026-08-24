@@ -624,34 +624,34 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	dma_transfer_rx = (struct capi_dma_transfer) {
 		.src = (capi_dma_glbl_addr_t)&spi_reg->fifo8,
 		.dst = transfer->rx_buf ?
-			(capi_dma_glbl_addr_t)transfer->rx_buf :
-			(capi_dma_glbl_addr_t)zero_rx,
-		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
-		.dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
-		.src_inc = CAPI_DMA_NO_INCREMENT,
-		.dst_inc = transfer->rx_buf ?
-			   CAPI_DMA_BYTE_INCREMENT :
-			   CAPI_DMA_NO_INCREMENT,
-		.length = transfer->rx_size,
-		.extra = &dma_transfer_rx_extra,
-		.xfer_type = CAPI_DMA_DEV_TO_MEM,
+		       (capi_dma_glbl_addr_t)transfer->rx_buf :
+		       (capi_dma_glbl_addr_t)zero_rx,
+		       .src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
+		       .dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
+		       .src_inc = CAPI_DMA_NO_INCREMENT,
+		       .dst_inc = transfer->rx_buf ?
+				  CAPI_DMA_BYTE_INCREMENT :
+				  CAPI_DMA_NO_INCREMENT,
+				  .length = transfer->rx_size,
+				  .extra = &dma_transfer_rx_extra,
+				  .xfer_type = CAPI_DMA_DEV_TO_MEM,
 	};
 	dma_transfer_tx_extra = (struct max_capi_dma_xfer_extra) {
 		.reqsel = MAX_CAPI_DMA_REQUEST_SPI_TX,
 	};
 	dma_transfer_tx = (struct capi_dma_transfer) {
 		.src = transfer->tx_buf ?
-			(capi_dma_glbl_addr_t)transfer->tx_buf :
-			(capi_dma_glbl_addr_t)zero_tx,
-		.dst = (capi_dma_glbl_addr_t)&spi_reg->fifo8,
-		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
-		.dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
-		.src_inc = transfer->tx_buf ?
-			   CAPI_DMA_BYTE_INCREMENT : CAPI_DMA_NO_INCREMENT,
-		.dst_inc = CAPI_DMA_NO_INCREMENT,
-		.length = transfer->tx_size,
-		.extra = &dma_transfer_tx_extra,
-		.xfer_type = CAPI_DMA_MEM_TO_DEV,
+		       (capi_dma_glbl_addr_t)transfer->tx_buf :
+		       (capi_dma_glbl_addr_t)zero_tx,
+		       .dst = (capi_dma_glbl_addr_t)&spi_reg->fifo8,
+		       .src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
+		       .dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
+		       .src_inc = transfer->tx_buf ?
+				  CAPI_DMA_BYTE_INCREMENT : CAPI_DMA_NO_INCREMENT,
+				  .dst_inc = CAPI_DMA_NO_INCREMENT,
+				  .length = transfer->tx_size,
+				  .extra = &dma_transfer_tx_extra,
+				  .xfer_type = CAPI_DMA_MEM_TO_DEV,
 	};
 
 	spi_priv->dma_completed_count = 0;
@@ -778,6 +778,9 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	spi_priv->dma_channel_rx = NULL;
 	spi_priv->dma_channel_tx = NULL;
 	spi_priv->fifo_async.active = false;
+	spi_priv->dma_handle = NULL;
+	spi_priv->callback = NULL;
+	spi_priv->callback_arg = NULL;
 	spi_id = spi_priv->identifier;
 
 	/* Copy user config or set defaults */
@@ -852,7 +855,7 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 	struct max_capi_spi_priv *spi_priv;
 	uint8_t spi_id;
 
-	if (!handle)
+	if (!handle || !handle->priv)
 		return -EINVAL;
 
 	spi_priv = handle->priv;
@@ -892,7 +895,7 @@ int max_capi_spi_transceive(struct capi_spi_device *device,
 {
 	const struct max_capi_spi_priv *spi_priv;
 
-	if (!device || !device->controller || !transfer)
+	if (!device || !device->controller || !device->controller->priv || !transfer)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -915,7 +918,7 @@ int max_capi_spi_transceive_async(struct capi_spi_device *device,
 {
 	const struct max_capi_spi_priv *spi_priv;
 
-	if (!device || !device->controller || !transfer)
+	if (!device || !device->controller || !device->controller->priv || !transfer)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -938,7 +941,7 @@ int max_capi_spi_register_callback(struct capi_spi_controller_handle *handle,
 {
 	struct max_capi_spi_priv *priv;
 
-	if (!handle)
+	if (!handle || !handle->priv)
 		return -EINVAL;
 
 	priv = handle->priv;
@@ -960,7 +963,7 @@ int max_capi_spi_read_command(struct capi_spi_device *device,
 {
 	const struct max_capi_spi_priv *spi_priv;
 
-	if (!device || !device->controller || !transfer)
+	if (!device || !device->controller || !device->controller->priv || !transfer)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -982,7 +985,7 @@ int max_capi_spi_read_command_async(struct capi_spi_device *device,
 {
 	const struct max_capi_spi_priv *spi_priv;
 
-	if (!device || !device->controller || !transfer)
+	if (!device || !device->controller || !device->controller->priv || !transfer)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -1004,7 +1007,7 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
 	uint8_t spi_id;
 	mxc_spi_regs_t *spi_reg;
 
-	if (!device || !device->controller)
+	if (!device || !device->controller || !device->controller->priv)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -1048,7 +1051,7 @@ int max_capi_spi_set_cs(struct capi_spi_device *device,
 	mxc_spi_regs_t *spi_reg;
 	uint8_t spi_id;
 
-	if (!device || !device->controller)
+	if (!device || !device->controller || !device->controller->priv)
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
@@ -1092,6 +1095,9 @@ void max_capi_spi_isr(void *handle)
 		return;
 
 	spi_handle = (struct capi_spi_controller_handle *)handle;
+	if (!spi_handle->priv)
+		return;
+
 	spi_priv = spi_handle->priv;
 	spi_id = spi_priv->identifier;
 	spi_reg = MXC_SPI_GET_SPI(spi_id);

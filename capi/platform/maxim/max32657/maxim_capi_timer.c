@@ -1003,7 +1003,7 @@ int max_capi_timer_nsec_to_ticks(const struct capi_timer_handle *handle,
 		return -EINVAL;
 
 	if (duration_ns > ((UINT64_MAX - (one_billion / 2ULL)) /
-		    timer_priv->frequency))
+			   timer_priv->frequency))
 		return -EOVERFLOW;
 
 	result = ((duration_ns * timer_priv->frequency) +
@@ -1039,7 +1039,7 @@ int max_capi_timer_ticks_to_nsec(const struct capi_timer_handle *handle,
 		return -EINVAL;
 
 	if (ticks > ((UINT64_MAX - (timer_priv->frequency / 2ULL)) /
-	    one_billion))
+		     one_billion))
 		return -EOVERFLOW;
 
 	result = ((ticks * one_billion) + (timer_priv->frequency / 2ULL)) /

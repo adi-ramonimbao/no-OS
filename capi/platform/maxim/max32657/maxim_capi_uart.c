@@ -370,6 +370,9 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 	uart_priv->dma_completed = false;
 	uart_priv->dma_channel_rx = NULL;
 	uart_priv->dma_channel_tx = NULL;
+	uart_priv->dma_handle = NULL;
+	uart_priv->callback = NULL;
+	uart_priv->callback_arg = NULL;
 
 	if (config->clk_freq_hz == 0) {
 		/** Default */
@@ -1020,7 +1023,7 @@ int max_capi_uart_stdio_enable(struct capi_uart_handle *handle)
 {
 	struct max_capi_uart_priv *uart_priv;
 
-	if (!handle)
+	if (!handle || !handle->priv)
 		return -EINVAL;
 
 	uart_priv = handle->priv;

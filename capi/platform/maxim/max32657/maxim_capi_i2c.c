@@ -1002,6 +1002,13 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	i2c_extra = config->extra;
 	i2c_priv->identifier = config->identifier;
 	i2c_priv->extra = i2c_extra;
+	i2c_priv->dma_handle = NULL;
+	i2c_priv->callback = NULL;
+	i2c_priv->callback_arg = NULL;
+	i2c_priv->callback_active = false;
+	i2c_priv->dma_completed = false;
+	i2c_priv->async_transfer_in_progress = false;
+
 	i2c_id = i2c_priv->identifier;
 
 	if (config->clk_freq_hz <= MAX_CAPI_I2C_SPEED_STANDARD) {
