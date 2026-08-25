@@ -629,6 +629,8 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 	ret = capi_dma_register_complete_callback(i2c_priv->dma_channel_tx,
 			_max_capi_i2c_dma_complete_callback,
 			i2c_priv);
+	if (ret)
+		goto error_deinit_tx;
 
 	i2c_priv->dma_completed = false;
 
@@ -670,6 +672,8 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 	if (i2c_priv->async_transfer_in_progress)
 		return -EBUSY;
 
+	i2c_priv->async_transfer_in_progress = true;
+
 	async->state = MAX_CAPI_I2C_ASYNC_STATE_RX_DATA;
 
 	if (async->subaddr_buf) {
@@ -690,8 +694,10 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 			}
 		}
 		while (!(MXC_I3C_Controller_GetFlags(i3c) & MXC_F_I3C_CONT_INTFL_DONE)) {
-			if (--timeout == 0)
+			if (--timeout == 0) {
+				i2c_priv->async_transfer_in_progress = false;
 				return -ETIMEDOUT;
+			}
 		}
 		MXC_I3C_Controller_ClearFlags(i3c, MXC_F_I3C_CONT_INTFL_DONE);
 	}
@@ -916,7 +922,8 @@ int _max_capi_i2c_setup_async(struct capi_i2c_device *device,
 	if (i2c_priv->async->state != MAX_CAPI_I2C_ASYNC_STATE_IDLE)
 		return -EBUSY;
 
-	i2c_priv->async->target_addr = transfer->target_addr;
+	i2c_priv->async->target_addr = transfer->target_addr ?
+				       transfer->target_addr : device->address;
 	i2c_priv->async->send_stop = !transfer->no_stop;
 	i2c_priv->async->result = 0;
 

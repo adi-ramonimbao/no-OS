@@ -1019,6 +1019,11 @@ struct capi_uart_ops max_capi_uart_ops = {
 
 /** Platform-specific functions ***********************************************/
 
+/**
+ * @brief Enable the stdio redirection for the MAX32657
+ * @param handle The UART handle
+ * @return 0 on success, negative error code otherwise
+ */
 int max_capi_uart_stdio_enable(struct capi_uart_handle *handle)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -1043,6 +1048,11 @@ int max_capi_uart_stdio_enable(struct capi_uart_handle *handle)
 #define STDOUT_FILENO   1   /**> Definition of stdout */
 #define STDERR_FILENO   2   /**> Definition of stderr */
 
+/**
+ * @brief Get terminal type
+ * @param file File handle
+ * @return 1 if stdin/stdout/stderr, 0 otherwise
+ */
 int _isatty(int file)
 {
 	if (file >= STDIN_FILENO && file <= STDERR_FILENO)
@@ -1052,6 +1062,13 @@ int _isatty(int file)
 	return 0;
 }
 
+/**
+ * @brief Write to file
+ * @param file File handle
+ * @param ptr Source buffer
+ * @param len Length to write
+ * @return Number of bytes on success, -1 otherwise
+ */
 int _write(int file, char *ptr, int len)
 {
 	int ret;
@@ -1073,6 +1090,11 @@ int _write(int file, char *ptr, int len)
 	return -1;
 }
 
+/**
+ * @brief Close file
+ * @param file File handle
+ * @return 0 on success, -1 otherwise
+ */
 int _close(int file)
 {
 	if (file >= STDIN_FILENO && file <= STDERR_FILENO)
@@ -1082,6 +1104,14 @@ int _close(int file)
 	return -1;
 }
 
+/**
+ * @brief File seek
+ * @note No implementation. Always returns -1
+ * @param file File handle
+ * @param ptr Offset
+ * @param whence Direction of offset
+ * @return 0 on success, -1 otherwise
+ */
 int _lseek(int file, off_t offset, int whence)
 {
 	(void) file;
@@ -1092,6 +1122,13 @@ int _lseek(int file, off_t offset, int whence)
 	return -1;
 }
 
+/**
+ * @brief Read from file
+ * @param file File handle
+ * @param ptr Destination buffer
+ * @param len Length to read
+ * @return Number of bytes on success, -1 otherwise
+ */
 int _read(int file, char *ptr, int len)
 {
 	int ret;
@@ -1106,12 +1143,18 @@ int _read(int file, char *ptr, int len)
 			return -1;
 		}
 
-		return ret;
+		return 1;
 	}
 	errno = EBADF;
 	return -1;
 }
 
+/**
+ * @brief File status
+ * @param file File handle
+ * @param st File status response
+ * @return 0
+ */
 int _fstat(int file, struct stat *st)
 {
 	if (file >= STDIN_FILENO && file <= STDERR_FILENO) {

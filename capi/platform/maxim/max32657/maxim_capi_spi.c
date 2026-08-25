@@ -549,8 +549,10 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		return target_id;
 	}
 
-	if (device->max_speed_hz > spi_priv->clock_freq)
+	if (device->max_speed_hz > spi_priv->clock_freq) {
+		spi_priv->transfer_in_progress = false;
 		return -EINVAL;
+	}
 	target_speed = device->max_speed_hz ? device->max_speed_hz :
 		       spi_priv->clock_freq;
 	if (target_speed != spi_priv->clock_freq) {

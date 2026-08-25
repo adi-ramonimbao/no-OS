@@ -89,7 +89,7 @@ int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 	priv->id = config->identifier;
 	priv->port = MXC_GPIO_GET_GPIO(config->identifier);
 	priv->num_pins = config->num_pins;
-	priv->pin_mask = (1U << config->num_pins) - 1;
+	priv->pin_mask = (uint32_t)((1ULL << config->num_pins) - 1);
 	priv->direction_mask = priv->pin_mask; /* All inputs by default */
 
 	/* Copy user config or set defaults */
