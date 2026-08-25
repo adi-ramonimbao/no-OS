@@ -148,9 +148,11 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	rst_flags = MXC_WDT_GetResetFlag(MXC_WDT);
 
 	memset(&wdt_config, 0, sizeof(wdt_config));
+	wdt_config.upperIntPeriod = MXC_WDT_PERIOD_2_31;
+	wdt_config.upperResetPeriod = MXC_WDT_PERIOD_2_31;
 	ret = MXC_WDT_Init(MXC_WDT, &wdt_config);
-	MXC_WDT_SetIntPeriod(MXC_WDT, MXC_WDT_PERIOD_2_31);
-	MXC_WDT_SetResetPeriod(MXC_WDT, MXC_WDT_PERIOD_2_31);
+	MXC_WDT_SetIntPeriod(MXC_WDT, &wdt_config);
+	MXC_WDT_SetResetPeriod(MXC_WDT, &wdt_config);
 	MXC_WDT_DisableInt(MXC_WDT);
 	MXC_WDT_DisableReset(MXC_WDT);
 	MXC_WDT_Disable(MXC_WDT);
