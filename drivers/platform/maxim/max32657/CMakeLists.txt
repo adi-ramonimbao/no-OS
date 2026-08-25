@@ -87,11 +87,3 @@ target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX32657/Sour
 target_compile_definitions(no-os PUBLIC -DTARGET_NUM=32657)
 target_compile_definitions(no-os PUBLIC -DTARGET=32657)
 target_compile_definitions(no-os PUBLIC -DCONFIG_TRUSTED_EXECUTION_SECURE=1)
-
-# Memory layout definitions (from max32657_memory.mk)
-# Physical addresses: Flash @ 0x01000000, SRAM @ 0x20000000
-# Secure bit (bit 28) set for secure access: | (1<<28)
-target_compile_definitions(no-os PUBLIC -D__MXC_FLASH_MEM_BASE=0x11000000)
-target_compile_definitions(no-os PUBLIC -D__MXC_FLASH_MEM_SIZE=0x00100000)
-target_compile_definitions(no-os PUBLIC -D__MXC_SRAM_MEM_BASE=0x30000000)
-target_compile_definitions(no-os PUBLIC -D__MXC_SRAM_MEM_SIZE=0x00040000)
