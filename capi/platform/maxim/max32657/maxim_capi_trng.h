@@ -11,12 +11,12 @@
 #ifndef MAXIM_CAPI_TRNG_H_
 #define MAXIM_CAPI_TRNG_H_
 
+#include "capi_trng.h"
+#include "capi_irq.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "capi_trng.h"
-#include "capi_irq.h"
 
 extern const struct capi_trng_ops max_capi_trng_ops;
 

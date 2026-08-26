@@ -16,6 +16,10 @@
 #include "maxim_capi_gpio.h"
 #include "capi_alloc.h"
 
+#if defined(__cplusplus)
+extern "C" {
+#endif /* __cplusplus*/
+
 /**
  * @enum max_capi_timer_clock_source
  * @brief Clock source selection
@@ -96,5 +100,9 @@ struct max_capi_timer_counter_extra {
 };
 
 extern struct capi_timer_ops max_capi_timer_ops;
+
+#if defined(__cplusplus)
+}
+#endif /* __cplusplus */
 
 #endif /* MAXIM_CAPI_TIMER_H_ */

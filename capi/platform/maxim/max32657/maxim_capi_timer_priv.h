@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_TIMER_PRIV_H_
 #define MAXIM_CAPI_TIMER_PRIV_H_
 
+#include "maxim_capi_timer.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus*/
-
-#include "maxim_capi_timer.h"
 
 #define MAX_CAPI_PWM_TMR_MAX_VAL	0x0000FFFF
 #define MAX_CAPI_PWM_PRESCALER_VAL(n)	((n - 1U) * 16)

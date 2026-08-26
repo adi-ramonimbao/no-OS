@@ -11,16 +11,16 @@
 #ifndef MAXIM_CAPI_UART_H_
 #define MAXIM_CAPI_UART_H_
 
-#if defined(__cplusplus)
-extern "C" {
-#endif /* __cplusplus */
-
 #include "uart.h"
 #include "capi_dma.h"
 #include "capi_uart.h"
 #include "maxim_capi_dma.h"
 #include "maxim_capi_irq.h"
 #include "maxim_capi_gpio.h"
+
+#if defined(__cplusplus)
+extern "C" {
+#endif /* __cplusplus */
 
 #define MAX_CAPI_UART_DEFAULT_BAUD 115200
 

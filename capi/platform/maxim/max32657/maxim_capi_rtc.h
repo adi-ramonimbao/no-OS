@@ -11,12 +11,12 @@
 #ifndef MAXIM_CAPI_RTC_H_
 #define MAXIM_CAPI_RTC_H_
 
+#include "capi_irq.h"
+#include "capi_rtc.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "capi_irq.h"
-#include "capi_rtc.h"
 
 /**
  * @struct max_capi_rtc_extra

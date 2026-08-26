@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_UART_PRIV_H_
 #define MAXIM_CAPI_UART_PRIV_H_
 
+#include "maxim_capi_uart.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_uart.h"
 
 /**
  * @struct max_capi_uart_priv

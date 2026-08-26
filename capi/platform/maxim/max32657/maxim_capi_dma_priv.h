@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_DMA_PRIV_H_
 #define MAXIM_CAPI_DMA_PRIV_H_
 
+#include "maxim_capi_dma.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_dma.h"
 
 /**
  * @struct max_capi_dma_priv

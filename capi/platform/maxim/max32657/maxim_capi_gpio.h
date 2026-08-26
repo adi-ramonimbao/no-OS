@@ -11,7 +11,7 @@
 #ifndef MAXIM_CAPI_GPIO_H_
 #define MAXIM_CAPI_GPIO_H_
 
-#if defined (__cplusplus)
+#if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
 

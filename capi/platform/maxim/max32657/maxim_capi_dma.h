@@ -11,13 +11,13 @@
 #ifndef MAXIM_CAPI_DMA_H_
 #define MAXIM_CAPI_DMA_H_
 
-#if defined(__cplusplus)
-extern "C" {
-#endif /* __cplusplus */
-
 #include "dma.h"
 #include "capi_dma.h"
 #include "capi_alloc.h"
+
+#if defined(__cplusplus)
+extern "C" {
+#endif /* __cplusplus */
 
 #if !defined(CONFIG_TRUSTED_EXECUTION_SECURE) || (CONFIG_TRUSTED_EXECUTION_SECURE != 1)
 #error "CONFIG_TRUSTED_EXECUTION_SECURE must be defined and set to 1."

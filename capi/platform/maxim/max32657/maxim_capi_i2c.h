@@ -11,12 +11,12 @@
 #ifndef MAXIM_CAPI_I2C_H_
 #define MAXIM_CAPI_I2C_H_
 
+#include "maxim_capi_gpio.h"
+#include "capi_i2c.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_gpio.h"
-#include "capi_i2c.h"
 
 /**
  * @enum max_capi_i2c_speed

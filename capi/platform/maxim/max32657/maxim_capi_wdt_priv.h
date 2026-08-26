@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_WDT_PRIV_H_
 #define MAIXM_CAPI_WDT_PRIV_H_
 
+#include "maxim_capi_wdt.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_wdt.h"
 
 struct max_capi_wdt_priv {
 	/** WDT ID */

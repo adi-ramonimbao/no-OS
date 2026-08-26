@@ -11,12 +11,12 @@
 #ifndef MAXIM_CAPI_SPI_H_
 #define MAXIM_CAPI_SPI_H_
 
+#include "capi_spi.h"
+#include "maxim_capi_gpio.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "capi_spi.h"
-#include "maxim_capi_gpio.h"
 
 /**
  * @enum max_capi_spi_device_role

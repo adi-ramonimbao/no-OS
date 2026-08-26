@@ -11,13 +11,13 @@
 #ifndef MAXIM_CAPI_WDT_H_
 #define MAXIM_CAPI_WDT_H_
 
-#if defined(__cplusplus)
-extern "C" {
-#endif /* __cplusplus */
-
 #include "capi_wdt.h"
 #include "wdt.h"
 #include <stdbool.h>
+
+#if defined(__cplusplus)
+extern "C" {
+#endif /* __cplusplus */
 
 /**
  * @enum max_capi_wdt_flag

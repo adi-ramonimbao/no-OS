@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_SPI_PRIV_H_
 #define MAXIM_CAPI_SPI_PRIV_H_
 
+#include "maxim_capi_spi.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_spi.h"
 
 /**
  * @struct max_capi_spi_fifo_async

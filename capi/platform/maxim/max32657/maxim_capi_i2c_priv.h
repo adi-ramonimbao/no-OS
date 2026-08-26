@@ -11,11 +11,11 @@
 #ifndef MAXIM_CAPI_I2C_PRIV_H_
 #define MAXIM_CAPI_I2C_PRIV_H_
 
+#include "maxim_capi_i2c.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif /* __cplusplus */
-
-#include "maxim_capi_i2c.h"
 
 #define MAX_CAPI_I2C_TARGET_RX_BUFFER_SIZE	256
 #define MAX_CAPI_I2C_FIFO_DEPTH			32
