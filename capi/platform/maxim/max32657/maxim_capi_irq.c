@@ -10,8 +10,6 @@
 
 #include <string.h>
 #include <errno.h>
-#include "maxim_capi_gpio.h"
-#include "maxim_capi_gpio_priv.h"
 #include "maxim_capi_irq.h"
 #include "max32657.h"
 #include "gpio.h"
@@ -27,7 +25,6 @@
 
 static bool irq_initialized = false;
 static struct max_capi_irq_entry irq_table[MXC_IRQ_COUNT];
-static struct max_capi_irq_entry gpio_irq_table[MXC_CFG_GPIO_PINS_PORT];
 static uint32_t default_priority = 0;
 
 /** Helper functions ***********************************************************/
@@ -69,9 +66,8 @@ int max_capi_irq_init(struct capi_irq_config *config)
 	if (irq_initialized)
 		return -EBUSY;
 
-	/* Clear callback tables */
+	/* Clear callback table */
 	memset(irq_table, 0, sizeof(irq_table));
-	memset(gpio_irq_table, 0, sizeof(gpio_irq_table));
 
 	if (config->extra) {
 		extra = config->extra;
@@ -101,11 +97,6 @@ int max_capi_irq_deinit(void)
 		}
 		irq_table[i].callback = NULL;
 		irq_table[i].arg = NULL;
-	}
-
-	for (i = 0; i < MXC_CFG_GPIO_PINS_PORT; i++) {
-		gpio_irq_table[i].callback = NULL;
-		gpio_irq_table[i].arg = NULL;
 	}
 
 	irq_initialized = false;
@@ -367,231 +358,6 @@ int max_capi_irq_set_level_edge_trigger(uint32_t irq,
 	return 0;
 }
 
-/** Platform-specific functions ***********************************************/
-
-/**
- * @brief Callback for DMA
- * @param ch DMA channel
- * @param reason Not used
- */
-void max_capi_dma_callback(int ch, int reason)
-{
-	IRQn_Type irq;
-
-	switch (ch) {
-	case 0:
-		irq = DMA1_CH0_IRQn;
-		break;
-	case 1:
-		irq = DMA1_CH1_IRQn;
-		break;
-	case 2:
-		irq = DMA1_CH2_IRQn;
-		break;
-	case 3:
-		irq = DMA1_CH3_IRQn;
-		break;
-	default:
-		return;
-	}
-
-	if (irq_table[irq].callback)
-		irq_table[irq].callback(irq_table[irq].arg);
-}
-
-/**
- * @brief Connect a GPIO pin to a callback
- * @param pin - the GPIO pin
- * @param isr - the callback function to connect to the IRQ
- * @param arg - the arguments to pass to the callback function
- * @return 0 on success, negative error code otherwise
- */
-int max_capi_gpio_irq_connect(struct capi_gpio_pin *pin,
-			      capi_isr_callback_t isr, void *arg)
-{
-	mxc_gpio_cfg_t config;
-	struct max_capi_gpio_port_priv *gpio_priv;
-
-	if (!irq_initialized)
-		return -EINVAL;
-
-	if (!pin || !pin->port_handle || !pin->port_handle->priv || !isr)
-		return -EINVAL;
-
-	if (pin->number >= MXC_CFG_GPIO_PINS_PORT)
-		return -EINVAL;
-
-	gpio_priv = pin->port_handle->priv;
-
-	config = (mxc_gpio_cfg_t) {
-		.port = MXC_GPIO_GET_GPIO(gpio_priv->id),
-		.mask = (1U << pin->number),
-	};
-
-	gpio_irq_table[pin->number].callback = isr;
-	gpio_irq_table[pin->number].arg = arg;
-
-	MXC_GPIO_RegisterCallback(&config, gpio_irq_table[pin->number].callback,
-				  gpio_irq_table[pin->number].arg);
-
-	return 0;
-}
-
-/**
- * @brief Disconnect a GPIO from a callback
- * @param pin - the GPIO pin
- * @return 0 on success, negative error code otherwise
- */
-int max_capi_gpio_irq_disconnect(const struct capi_gpio_pin *pin)
-{
-	if (!irq_initialized)
-		return -EINVAL;
-
-	if (!pin)
-		return -EINVAL;
-
-	if (pin->number >= MXC_CFG_GPIO_PINS_PORT)
-		return -EINVAL;
-
-	if (gpio_irq_table[pin->number].enabled)
-		gpio_irq_table[pin->number].enabled = false;
-
-	gpio_irq_table[pin->number].callback = NULL;
-	gpio_irq_table[pin->number].arg = NULL;
-
-	return 0;
-}
-
-/**
- * @brief Enable an interrupt on a specific pin
- * @param pin - the GPIO pin
- * @return 0 on success, negative error code otherwise
- */
-int max_capi_gpio_irq_enable(struct capi_gpio_pin *pin)
-{
-	struct max_capi_gpio_port_priv *gpio_priv;
-
-	if (!irq_initialized)
-		return -EINVAL;
-
-	if (!pin || !pin->port_handle || !pin->port_handle->priv)
-		return -EINVAL;
-
-	if (pin->number >= MXC_CFG_GPIO_PINS_PORT)
-		return -EINVAL;
-
-	gpio_priv = pin->port_handle->priv;
-
-	MXC_GPIO_EnableInt(MXC_GPIO_GET_GPIO(gpio_priv->id),
-			   (1U << pin->number));
-	gpio_irq_table[pin->number].enabled = true;
-
-	return 0;
-}
-
-/**
- * @brief Disable an interrupt on a specific pin
- * @param pin - the GPIO pin
- * @return 0 on success, negative error code oherwise
- */
-int max_capi_gpio_irq_disable(struct capi_gpio_pin *pin)
-{
-	struct max_capi_gpio_port_priv *gpio_priv;
-
-	if (!irq_initialized)
-		return -EINVAL;
-
-	if (!pin || !pin->port_handle || !pin->port_handle->priv)
-		return -EINVAL;
-
-	if (pin->number >= MXC_CFG_GPIO_PINS_PORT)
-		return -EINVAL;
-
-	gpio_priv = pin->port_handle->priv;
-
-	MXC_GPIO_DisableInt(MXC_GPIO_GET_GPIO(gpio_priv->id),
-			    (1U << pin->number));
-	gpio_irq_table[pin->number].enabled = false;
-
-	return 0;
-}
-
-/**
- * @brief Set level/edge trigger for a specific pin
- * @param pin - the GPIO pin
- * @param trigger  - the trigger to set the pin to
- * @return 0 on success, negative error code otherwise
- */
-int max_capi_gpio_irq_set_level_edge_trigger(struct capi_gpio_pin *pin,
-		enum capi_irq_trig_level trigger)
-{
-	mxc_gpio_cfg_t config;
-	mxc_gpio_int_pol_t trig;
-	struct max_capi_gpio_port_priv *gpio_priv;
-
-	if (!irq_initialized)
-		return -EINVAL;
-
-	if (!pin || !pin->port_handle || !pin->port_handle->priv)
-		return -EINVAL;
-
-	if (pin->number >= MXC_CFG_GPIO_PINS_PORT)
-		return -EINVAL;
-
-	switch (trigger) {
-	case CAPI_IRQ_LEVEL_LOW:
-		trig = MXC_GPIO_INT_LOW;
-		break;
-	case CAPI_IRQ_LEVEL_HIGH:
-		trig = MXC_GPIO_INT_HIGH;
-		break;
-	case CAPI_IRQ_EDGE_FALLING:
-		trig = MXC_GPIO_INT_FALLING;
-		break;
-	case CAPI_IRQ_EDGE_RISING:
-		trig = MXC_GPIO_INT_RISING;
-		break;
-	case CAPI_IRQ_EDGE_BOTH:
-		trig = MXC_GPIO_INT_BOTH;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	gpio_priv = pin->port_handle->priv;
-
-	config = (mxc_gpio_cfg_t) {
-		.port = MXC_GPIO_GET_GPIO(gpio_priv->id),
-		.mask = (1U << pin->number),
-	};
-
-	MXC_GPIO_IntConfig(&config, trig);
-
-	return 0;
-}
-
-/**
- * @brief Enable interrupts on all pins
- * @return 0
- */
-int max_capi_gpio_irq_global_enable(void)
-{
-	MXC_GPIO_EnableInt(MXC_GPIO_GET_GPIO(0), 0xFFFFFFFF);
-
-	return 0;
-}
-
-/**
- * @brief Disable interrupts on all pins
- * @return 0
- */
-int max_capi_gpio_irq_global_disable(void)
-{
-	MXC_GPIO_DisableInt(MXC_GPIO_GET_GPIO(0), 0xFFFFFFFF);
-
-	return 0;
-}
-
 /** Peripheral IRQ Handlers ***************************************************/
 
 void UART_IRQHandler()
@@ -712,10 +478,14 @@ void TMR5_IRQHandler()
 
 void GPIO0_IRQHandler()
 {
-	MXC_GPIO_Handler(0);
+	uint32_t flags = MXC_GPIO_GetFlags(MXC_GPIO0);
 
 	if (irq_table[GPIO0_IRQn].callback)
 		irq_table[GPIO0_IRQn].callback(irq_table[GPIO0_IRQn].arg);
+
+	/* Clear only the flags latched at entry, after dispatch: the PINT path
+	 * needs them set so MXC_GPIO_Handler can pick the per-pin callback. */
+	MXC_GPIO_ClearFlags(MXC_GPIO0, flags);
 }
 
 void SPI_IRQHandler()
@@ -730,9 +500,6 @@ void WDT_IRQHandler()
 {
 	if (MXC_WDT->ctrl & (MXC_F_WDT_CTRL_CLKRDY_IE | MXC_F_WDT_CTRL_CLKRDY))
 		MXC_WDT->ctrl &= ~MXC_F_WDT_CTRL_CLKRDY_IE;
-
-	MXC_WDT_ClearIntFlag(MXC_WDT);
-	MXC_WDT_ClearResetFlag(MXC_WDT);
 
 	if (irq_table[WDT_IRQn].callback)
 		irq_table[WDT_IRQn].callback(irq_table[WDT_IRQn].arg);

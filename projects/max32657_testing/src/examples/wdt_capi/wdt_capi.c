@@ -39,19 +39,27 @@
 #include "maxim_capi_uart.h"
 #include "wdt.h"  // For MXC_WDT register access
 
-#define CORRECT_PERIOD_MS	30000
-#define INCORRECT_PERIOD_MS	 1000
-#define CHOSEN_PERIOD	CORRECT_PERIOD_MS
+#define INCORRECT_PERIOD_MS	1000
+
+static volatile bool wdt_irq_fired;
 
 void wdt_callback(int chan_id, void *arg, uint32_t extra_flags)
 {
-	printf("Watchdog triggered!\n\r");
+	wdt_irq_fired = true;
 }
 
 int example_main(void)
 {
 	int ret;
-	uint8_t count = 0;
+
+	/* IRQ setup */
+	struct capi_irq_handle *irq_handle = NULL;
+	struct capi_irq_config irq_config = {
+		.irq_ctrl_id = 0,
+	};
+	ret = capi_irq_init(&irq_config);
+	if (ret)
+		return ret;
 
 	/* UART setup */
 	struct capi_uart_handle *uart_handle = NULL;
@@ -94,7 +102,7 @@ int example_main(void)
 
 	uint32_t flags = 0;
 	bool system_was_reset = false;
-	bool irq_mode = false;
+	bool irq_enabled = false;
 	enum max_capi_wdt_period late_period = MAX_CAPI_WDT_PERIOD_2_16;
 	enum max_capi_wdt_period early_period = MAX_CAPI_WDT_PERIOD_2_16;
 	ret = max_capi_wdt_get_flags(wdt_handle, &flags);
@@ -112,51 +120,69 @@ int example_main(void)
 	printf("Starting watchdog\n\r");
 
 	if (system_was_reset) {
-		/* With PCLK = 25 MHz:
-		 * Interrupt periods: 2^29=21.5s (early), 2^31=85.9s (late)
-		 * Reset periods: Disable by setting to maximum (2^31)
-		 * This allows interrupts to fire without causing resets
+		/* Interrupt mode: fire the late interrupt ~2.68 s after a feed
+		 * (PCLK = 25 MHz) while the reset output stays disabled, so the
+		 * callback runs without resetting the SoC.
 		 */
-		late_period = MAX_CAPI_WDT_PERIOD_2_31;
-		early_period = MAX_CAPI_WDT_PERIOD_2_29;
-		irq_mode = true;
+		late_period = MAX_CAPI_WDT_PERIOD_2_26;
+		irq_enabled = true;
 	}
 
 	struct max_capi_wdt_chan_extra wdt_chan_extra = {
-		.mode = system_was_reset ? MAX_CAPI_WDT_MODE_WINDOWED : MAX_CAPI_WDT_MODE_COMPATIBILITY,
+		.mode = MAX_CAPI_WDT_MODE_COMPATIBILITY,
 		.late_interrupt = late_period,
-		.late_reset = system_was_reset ? MAX_CAPI_WDT_PERIOD_2_31 : late_period,  // Disable reset: set to max
+		/* Disable reset in interrupt mode by pinning it to the max period */
+		.late_reset = system_was_reset ? MAX_CAPI_WDT_PERIOD_2_31 : late_period,
 		.early_interrupt = early_period,
-		.early_reset = system_was_reset ? MAX_CAPI_WDT_PERIOD_2_31 : early_period, // Disable reset: set to max
+		.early_reset = early_period,
 	};
 	struct capi_wdt_chan_config wdt_chan_config = {
 		.extra = &wdt_chan_extra,
-		.irq_mode = irq_mode,
+		.irq_enabled = irq_enabled,
 	};
+
 	ret = capi_wdt_setup(wdt_handle, &wdt_chan_config);
 	if (ret)
 		return ret;
 
-	ret = capi_wdt_feed(wdt_handle);
-	if (ret)
-		return ret;
+	if (!system_was_reset) {
+		/* Reset-mode demo: start the WDT and stop feeding so it resets
+		 * the SoC. The next boot detects the reset flag and switches to
+		 * interrupt mode.
+		 */
+		printf("Reset mode: starting WDT, withholding feed "
+		       "(expect a reset in ~2.6 ms)...\n\r");
 
-	uint32_t delay_ms = system_was_reset ? CHOSEN_PERIOD : INCORRECT_PERIOD_MS;
-	printf("[t=0s] Initial feed, waiting %u ms...\n\r", delay_ms);
-	capi_wait_ms(delay_ms);
-
-	while (1) {
 		ret = capi_wdt_feed(wdt_handle);
 		if (ret)
 			return ret;
-		count++;
-		printf("[t=%us] Feed #%d\n\r", count * (delay_ms / 1000), count);
 
-		if (count >= 3)
-			break;
+		capi_wait_ms(INCORRECT_PERIOD_MS);
+		printf("ERROR: expected a WDT reset but none occurred\n\r");
+	} else {
+		/* Interrupt-mode demo: start the WDT and stop feeding so the
+		 * late interrupt fires. Reset is disabled, so the callback runs
+		 * without resetting.
+		 */
+		uint32_t waited = 0;
 
-		printf("Waiting %u ms...\n\r", delay_ms);
-		capi_wait_ms(delay_ms);
+		printf("Interrupt mode: starting WDT, withholding feed "
+		       "(expect the callback in ~2.7 s, no reset)...\n\r");
+
+		ret = capi_wdt_feed(wdt_handle);
+		if (ret)
+			return ret;
+
+		while (!wdt_irq_fired && waited < 5000) {
+			capi_wait_ms(100);
+			waited += 100;
+		}
+
+		if (wdt_irq_fired)
+			printf("WDT interrupt confirmed after ~%u ms (no reset)\n\r",
+			       waited);
+		else
+			printf("ERROR: WDT interrupt never fired\n\r");
 	}
 
 	printf("Deinitializing WDT...\n\r");

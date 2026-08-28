@@ -85,6 +85,8 @@ struct max_capi_timer_priv {
 	uint32_t clock_freq_hz;
 	/** MSDK clock storage */
 	mxc_tmr_clock_t msdk_clock;
+	/** Interrupt-driven events enabled */
+	bool use_irq;
 };
 
 #define CAPI_TIMER_HANDLE_MAXIM_INIT()				\

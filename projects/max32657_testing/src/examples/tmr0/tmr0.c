@@ -62,6 +62,14 @@ int example_main(void)
 	uint8_t count = 0;
 	uint32_t ticks;
 
+	/* IRQ setup (required for timer event interrupts) */
+	struct capi_irq_config irq_config = {
+		.irq_ctrl_id = 0,
+	};
+	ret = capi_irq_init(&irq_config);
+	if (ret)
+		return ret;
+
 	/* UART setup */
 	struct capi_uart_handle *uart_handle = NULL;
 	struct max_capi_uart_extra uart_extra = {
@@ -87,11 +95,15 @@ int example_main(void)
 
 	/* TMR0 setup: 32-bit mode */
 	struct capi_timer_handle *tmr0 = NULL;
+	struct max_capi_timer_extra tmr0_extra = {
+		.use_irq = true,
+	};
 	struct capi_timer_config tmr0_config = {
 		.ops = &max_capi_timer_ops,
 		.identifier = 0, /* TMR0 */
 		.input_clock_identifier = MAX_CAPI_TIMER_CLOCK_APB,
 		.output_freq_hz = 25000000,
+		.extra = &tmr0_extra,
 	};
 
 	ret = capi_timer_init(&tmr0, &tmr0_config);

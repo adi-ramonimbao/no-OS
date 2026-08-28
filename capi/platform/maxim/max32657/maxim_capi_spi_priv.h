@@ -53,8 +53,12 @@ struct max_capi_spi_priv {
 	uint32_t identifier;
 	/** DMA controller handle */
 	struct capi_dma_handle *dma_handle;
-	/** For storing the platform-specific config */
-	struct max_capi_spi_extra extra;
+	/** Choose which chip select(s) gets enabled */
+	uint8_t chip_select;
+	/** SPI delays */
+	struct max_capi_spi_delays platform_delays;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 	/** Clock frequency */
 	uint32_t clock_freq;
 	/** DMA callback function */
@@ -73,7 +77,6 @@ struct max_capi_spi_priv {
 	volatile bool transfer_in_progress;
 	/** Async transfer in progress flag */
 	volatile bool async_transfer_in_progress;
-
 };
 
 #define CAPI_SPI_HANDLE_MAXIM_INIT()			\

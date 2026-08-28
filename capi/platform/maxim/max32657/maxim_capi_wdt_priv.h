@@ -28,6 +28,8 @@ struct max_capi_wdt_priv {
 	bool configured;
 	/** Enabled or not */
 	bool enabled;
+	/** WDT IRQ connected and enabled at the NVIC */
+	bool irq_connected;
 	/** Callback */
 	capi_wdt_callback_t callback;
 };

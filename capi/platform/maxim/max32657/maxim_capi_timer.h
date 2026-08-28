@@ -70,6 +70,8 @@ enum max_capi_timer_channel_mode {
 struct max_capi_timer_extra {
 	/** Timer bit mode (32-bit or 16-bit dual) */
 	enum max_capi_timer_bit_mode bit_mode;
+	/** Enable interrupt-driven events (connect and enable the timer IRQ) */
+	bool use_irq;
 };
 
 /**

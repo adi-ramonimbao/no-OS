@@ -86,6 +86,13 @@ int example_main(void)
 		.num_pins = 32,
 	};
 
+	struct capi_irq_config irq_config = {
+		.irq_ctrl_id = 0,
+	};
+	ret = capi_irq_init(&irq_config);
+	if (ret)
+		return ret;
+
 	ret = capi_uart_init(&uart, &uart_capi_config);
 	if (ret)
 		return ret;

@@ -18,6 +18,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
+struct max_capi_trng_extra {
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
+};
+
 extern const struct capi_trng_ops max_capi_trng_ops;
 
 #if defined(__cplusplus)

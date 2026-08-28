@@ -88,10 +88,12 @@ int max_capi_rtc_init(struct capi_rtc_handle **handle,
 	rtc_priv->event_ctx = NULL;
 	rtc_priv->events_enabled = 0;
 	rtc_priv->is_running = false;
+	rtc_priv->use_irq = false;
 
 	if (config->extra) {
 		rtc_extra = config->extra;
 		rtc_priv->measure_freq = rtc_extra->measure_freq;
+		rtc_priv->use_irq = rtc_extra->use_irq;
 	}
 
 	if (rtc_priv->measure_freq) {
@@ -100,19 +102,21 @@ int max_capi_rtc_init(struct capi_rtc_handle **handle,
 			rtc_priv->freq = actual_freq;
 	}
 
+	if (rtc_priv->use_irq) {
+		ret = capi_irq_connect(RTC_IRQn, max_capi_rtc_isr, rtc_handle);
+		if (ret)
+			goto reset_rtc;
+
+		ret = capi_irq_set_priority(RTC_IRQn, config->irq_priority);
+		if (ret)
+			goto reset_rtc;
+
+		ret = capi_irq_enable(RTC_IRQn);
+		if (ret)
+			goto reset_rtc;
+	}
+
 	rtc_handle->ops = config->ops;
-
-	ret = capi_irq_connect(RTC_IRQn, max_capi_rtc_isr, rtc_handle);
-	if (ret)
-		goto reset_rtc;
-
-	ret = capi_irq_set_priority(RTC_IRQn, config->irq_priority);
-	if (ret)
-		goto reset_rtc;
-
-	ret = capi_irq_enable(RTC_IRQn);
-	if (ret)
-		goto reset_rtc;
 
 	rtc = rtc_handle;
 	*handle = rtc_handle;
@@ -155,7 +159,9 @@ int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
 	MXC_RTC_DisableInt(MXC_RTC_INT_EN_LONG |
 			   MXC_RTC_INT_EN_SHORT |
 			   MXC_RTC_INT_EN_READY);
-	capi_irq_disable(RTC_IRQn);
+
+	if (rtc_priv->use_irq)
+		capi_irq_disable(RTC_IRQn);
 
 	ret = MXC_RTC_Stop();
 
@@ -513,6 +519,9 @@ int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
 		return -EINVAL;
 
 	rtc_priv = handle->priv;
+
+	if (!rtc_priv->use_irq)
+		return -ENOTSUP;
 
 	if (event == CAPI_RTC_EVENT_ALARM)
 		msdk_mask |= MXC_RTC_INT_EN_LONG;

@@ -4,15 +4,21 @@ target_sources(max32657_testing PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${PLATFORM}/main.c
 )
 
+if (CONFIG_MAX32657_TESTING_ADXL367_EXAMPLE)
+	target_sources(max32657_testing PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src/examples/adxl367_capi/adxl367_capi.c
+	)
+endif()
+
 if (CONFIG_MAX32657_TESTING_BLINKY_EXAMPLE)
 	target_sources(max32657_testing PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src/examples/blinky_capi/blinky_capi.c
 	)
 endif()
 
-if (CONFIG_MAX32657_TESTING_BUTTON_IRQ_EXAMPLE)
+if (CONFIG_MAX32657_TESTING_BUTTON_PINT_EXAMPLE)
 	target_sources(max32657_testing PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/examples/button_irq_capi/button_irq_capi.c
+		${CMAKE_CURRENT_SOURCE_DIR}/src/examples/button_pint_capi/button_pint_capi.c
 	)
 endif()
 

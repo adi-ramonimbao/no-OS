@@ -66,6 +66,7 @@ int max_capi_trng_init(struct capi_trng_handle **handle,
 	int ret;
 	struct capi_trng_handle *trng_handle;
 	struct max_capi_trng_priv *trng_priv;
+	bool use_irq = false;
 
 	if (!handle || !config)
 		return -EINVAL;
@@ -105,23 +106,33 @@ int max_capi_trng_init(struct capi_trng_handle **handle,
 	trng_priv->busy = false;
 	trng_priv->callback = NULL;
 	trng_priv->callback_arg = NULL;
+	trng_priv->use_irq = false;
 	trng_handle->ops = config->ops;
+
+	if (config->extra) {
+		struct max_capi_trng_extra *trng_extra = config->extra;
+		use_irq = trng_extra->use_irq;
+	}
 
 	ret = MXC_TRNG_Init();
 	if (ret)
 		goto free_handle;
 
-	ret = capi_irq_connect(TRNG_IRQn, max_capi_trng_isr, trng_handle);
-	if (ret)
-		goto shutdown_trng;
+	if (use_irq) {
+		ret = capi_irq_connect(TRNG_IRQn, max_capi_trng_isr, trng_handle);
+		if (ret)
+			goto shutdown_trng;
 
-	ret = capi_irq_set_priority(TRNG_IRQn, config->irq_priority);
-	if (ret)
-		goto shutdown_trng;
+		ret = capi_irq_set_priority(TRNG_IRQn, config->irq_priority);
+		if (ret)
+			goto shutdown_trng;
 
-	ret = capi_irq_enable(TRNG_IRQn);
-	if (ret)
-		goto shutdown_trng;
+		ret = capi_irq_enable(TRNG_IRQn);
+		if (ret)
+			goto shutdown_trng;
+
+		trng_priv->use_irq = true;
+	}
 
 	trng = trng_handle;
 	*handle = trng_handle;
@@ -149,6 +160,7 @@ free_handle:
 int max_capi_trng_deinit(struct capi_trng_handle *handle)
 {
 	int ret;
+	struct max_capi_trng_priv *trng_priv;
 
 	if (!handle || !handle->priv)
 		return -EINVAL;
@@ -156,13 +168,17 @@ int max_capi_trng_deinit(struct capi_trng_handle *handle)
 	if (handle != trng)
 		return -EINVAL;
 
-	capi_irq_disable(TRNG_IRQn);
-	MXC_TRNG_DisableInt();
+	trng_priv = handle->priv;
+
+	if (trng_priv->use_irq) {
+		capi_irq_disable(TRNG_IRQn);
+		MXC_TRNG_DisableInt();
+	}
 
 	ret = MXC_TRNG_Shutdown();
 
 	if (handle->init_allocated) {
-		capi_free(handle->priv);
+		capi_free(trng_priv);
 		capi_free(handle);
 	}
 
@@ -232,6 +248,9 @@ int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
 
 	trng_priv = handle->priv;
 
+	if (!trng_priv->use_irq)
+		return -ENOTSUP;
+
 	if (trng_priv->busy)
 		return -EBUSY;
 
@@ -254,6 +273,9 @@ int max_capi_trng_abort_async(struct capi_trng_handle *handle)
 		return -EINVAL;
 
 	trng_priv = handle->priv;
+
+	if (!trng_priv->use_irq)
+		return -ENOTSUP;
 
 	capi_irq_disable(TRNG_IRQn);
 	if (!trng_priv->busy) {

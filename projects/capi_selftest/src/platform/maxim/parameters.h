@@ -22,7 +22,7 @@
 #define UART_OPS		&max_capi_uart_ops
 #define UART_BAUDRATE		115200
 #define UART_EXTRA_TYPE		struct max_capi_uart_extra
-#define UART_EXTRA_INIT		{}
+#define UART_EXTRA_INIT		{ .use_irq = true }
 #define PLATFORM_NAME		"MAX32657"
 
 /**
@@ -70,7 +70,8 @@
 				  .polarity_mask = 0b111, \
 				  .chip_select = MAX_CAPI_SPI_CS0, \
 				  .clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0, \
-				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, }
+				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, \
+				  .use_irq = true, }
 #define SPI_CLK_FREQ		25000000
 
 #define SPI_DEVICE_NATIVE_CS	MAX_CAPI_SPI_CS0
@@ -85,7 +86,7 @@
 #define TIMER_INPUT_CLK_HZ		0
 #define TIMER_OUTPUT_FREQ_HZ		1000000U
 #define TIMER_EXTRA_TYPE		struct max_capi_timer_extra
-#define TIMER_EXTRA_INIT		{}
+#define TIMER_EXTRA_INIT		{ .use_irq = true }
 
 #define TIMER_DIRECTION			CAPI_TIMER_COUNT_UP
 #define TIMER_COUNTER_MAX		0x40000U
@@ -102,7 +103,7 @@
 #define I2C_IDENTIFIER		0U
 #define I2C_OPS			&max_capi_i2c_ops
 #define I2C_EXTRA_TYPE		struct max_capi_i2c_extra
-#define I2C_EXTRA_INIT		{}
+#define I2C_EXTRA_INIT		{ .use_irq = true }
 #define I2C_TARGET_ADDR		0x42
 #define I2C_HAS_IRQ		1
 

@@ -35,20 +35,10 @@
 #include <string.h>
 
 #include "no_os_delay.h"
-#include "no_os_lf256fifo.h"
 #include "capi/capi_irq.h"
 #include "capi/capi_uart.h"
 #include "maxim_capi_uart.h"
 #include "maxim_capi_irq.h"
-
-static struct lf256fifo *rx_fifo;
-// static uint8_t c;
-
-static void uart_rx_callback(void *arg)
-{
-
-
-}
 
 int example_main(void)
 {
@@ -56,8 +46,9 @@ int example_main(void)
 	uint8_t i;
 
 	/* UART config */
-	struct max_uart_extra_config uart_capi_extra_config = {
+	struct max_capi_uart_extra uart_capi_extra_config = {
 		.vssel = MXC_GPIO_VSSEL_VDDIOH,
+		.use_irq = true,
 	};
 	struct capi_uart_line_config uart_capi_line_config = {
 		.baudrate = 115200,
@@ -72,27 +63,12 @@ int example_main(void)
 		.extra = &uart_capi_extra_config,
 	};
 	struct capi_uart_handle *uart_capi;
-	/* NVIC config */
-	struct capi_irq_handle *irq;
+	/* The UART driver connects its own IRQ when use_irq is set */
 	struct capi_irq_config irq_config = {
-		.ops = &max_capi_irq_ops,
 		.irq_ctrl_id = 0,
 	};
 
-	ret = lf256fifo_init(&rx_fifo);
-	if (ret)
-		return ret;
-
-	ret = capi_irq_init(&irq, &irq_config);
-	if (ret)
-		return ret;
-
-	ret = capi_irq_connect(irq, MXC_UART_GET_IRQ(MXC_UART_GET_IDX(0)),
-			       uart_rx_callback, uart_capi);
-	if (ret)
-		return ret;
-
-	ret = capi_irq_enable(irq, MXC_UART_GET_IRQ(MXC_UART_GET_IDX(0)));
+	ret = capi_irq_init(&irq_config);
 	if (ret)
 		return ret;
 
@@ -104,7 +80,7 @@ int example_main(void)
 	if (ret < 0)
 		return ret;
 
-	max_uart_stdio_enable(uart_capi);
+	max_capi_uart_stdio_enable(uart_capi);
 
 	for (i = 0; i < 10; i++)
 	{

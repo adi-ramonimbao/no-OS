@@ -176,19 +176,12 @@ int max_capi_wdt_init(struct capi_wdt_handle **handle,
 	if (ret)
 		goto free_handle;
 
-	ret = capi_irq_connect(WDT_IRQn, max_capi_wdt_isr, wdt_handle);
-	if (ret)
-		goto free_handle;
-
-	ret = capi_irq_enable(WDT_IRQn);
-	if (ret)
-		goto free_handle;
-
 	/** Restore reset flags */
 	MXC_WDT->ctrl |= rst_flags;
 
 	wdt_priv->configured = false;
 	wdt_priv->enabled = false;
+	wdt_priv->irq_connected = false;
 
 	wdt_handle->ops = config->ops;
 
@@ -227,7 +220,8 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
 
 	ret = MXC_WDT_Shutdown(MXC_WDT);
 
-	capi_irq_disable(WDT_IRQn);
+	if (wdt_priv->irq_connected)
+		capi_irq_disable(WDT_IRQn);
 
 	if (handle->init_allocated) {
 		capi_free(handle->priv);
@@ -315,6 +309,18 @@ int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
 		MXC_WDT->ctrl &= ~MXC_F_WDT_CTRL_WIN_EN;
 
 	if (chan_config->irq_enabled) {
+		if (!wdt_priv->irq_connected) {
+			ret = capi_irq_connect(WDT_IRQn, max_capi_wdt_isr, handle);
+			if (ret)
+				return ret;
+
+			ret = capi_irq_enable(WDT_IRQn);
+			if (ret)
+				return ret;
+
+			wdt_priv->irq_connected = true;
+		}
+
 		/**
 		 * Set WDTn_CTRL.wdt_int_en to generate an interrupt when a
 		 * WDT late interrupt event occurs...
@@ -322,6 +328,11 @@ int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
 		MXC_WDT_EnableInt(MXC_WDT);
 		MXC_WDT_DisableReset(MXC_WDT);
 	} else {
+		if (wdt_priv->irq_connected) {
+			capi_irq_disable(WDT_IRQn);
+			wdt_priv->irq_connected = false;
+		}
+
 		/**
 		 * Set WDTn_CTRL.wdt_rst_en to generate an interrupt when a
 		 * WDT late reset event occurs...
@@ -439,6 +450,9 @@ void max_capi_wdt_isr(void *handle)
 
 	if (flags && wdt_priv->callback)
 		wdt_priv->callback(0, handle, flags);
+
+	/* Acknowledge the interrupt; reset-cause flags are left for the app */
+	MXC_WDT_ClearIntFlag(MXC_WDT);
 }
 
 struct capi_wdt_ops max_capi_wdt_ops = {

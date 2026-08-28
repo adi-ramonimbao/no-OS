@@ -319,14 +319,16 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 
 	struct capi_uart_handle *uart_handle;
 	struct max_capi_uart_priv *uart_priv;
-	struct max_capi_uart_extra *uart_extra;
+	enum max_capi_gpio_vssel vssel;
+	struct capi_dma_config *dma_config;
+	bool use_irq;
 	mxc_uart_clock_t clk_src;
 	uint32_t baud_rate, size;
 	mxc_uart_parity_t parity;
 	mxc_uart_stop_t stop;
 	struct capi_uart_line_config line_cfg;
 
-	if (!handle || !config || !config->extra)
+	if (!handle || !config)
 		return -EINVAL;
 
 	if (config->identifier >= MXC_UART_INSTANCES)
@@ -362,7 +364,17 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 
 	uart_handle->ops = config->ops;
 
-	uart_extra = config->extra;
+	if (config->extra) {
+		struct max_capi_uart_extra *extra = config->extra;
+
+		vssel = extra->vssel;
+		dma_config = extra->dma_config;
+		use_irq = extra->use_irq;
+	} else {
+		vssel = MAX_CAPI_GPIO_VSSEL_VDDIO;
+		dma_config = NULL;
+		use_irq = false;
+	}
 
 	uart_priv->uart = MXC_UART_GET_UART(config->identifier);
 	uart_priv->id = config->identifier;
@@ -373,6 +385,7 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 	uart_priv->dma_handle = NULL;
 	uart_priv->callback = NULL;
 	uart_priv->callback_arg = NULL;
+	uart_priv->use_irq = false;
 
 	if (config->clk_freq_hz == 0) {
 		/** Default */
@@ -414,7 +427,7 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 		goto free_handle;
 	}
 
-	ret = _max_uart_pins_config(uart_extra->vssel);
+	ret = _max_uart_pins_config(vssel);
 	if (ret)
 		goto free_handle;
 
@@ -436,22 +449,26 @@ int max_capi_uart_init(struct capi_uart_handle **handle,
 		goto free_handle;
 	}
 
-	if (config->dma_handle && uart_extra->dma_config) {
+	if (config->dma_handle && dma_config) {
 		uart_priv->dma_handle = config->dma_handle;
 		ret = capi_dma_init(&uart_priv->dma_handle,
-				    uart_extra->dma_config);
+				    dma_config);
 		if (ret)
 			goto shutdown_uart;
 	}
 
-	IRQn_Type irq = MXC_UART_GET_IRQ(config->identifier);
-	ret = capi_irq_connect(irq, max_capi_uart_isr, uart_handle);
-	if (ret)
-		goto cleanup_channels;
+	if (use_irq) {
+		IRQn_Type irq = MXC_UART_GET_IRQ(config->identifier);
+		ret = capi_irq_connect(irq, max_capi_uart_isr, uart_handle);
+		if (ret)
+			goto cleanup_channels;
 
-	ret = capi_irq_enable(irq);
-	if (ret)
-		goto cleanup_channels;
+		ret = capi_irq_enable(irq);
+		if (ret)
+			goto cleanup_channels;
+
+		uart_priv->use_irq = true;
+	}
 
 	uart[config->identifier] = uart_handle;
 	*handle = uart_handle;
@@ -496,7 +513,8 @@ int max_capi_uart_deinit(struct capi_uart_handle *handle)
 	uart_priv->async_transfer_in_progress = false;
 	uart_priv->dma_completed = false;
 
-	capi_irq_disable(MXC_UART_GET_IRQ(id));
+	if (uart_priv->use_irq)
+		capi_irq_disable(MXC_UART_GET_IRQ(id));
 
 	MXC_UART_Shutdown(uart_priv->uart);
 	if (handle->init_allocated) {
@@ -601,6 +619,9 @@ int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
 	if (uart_priv->dma_handle)
 		return _max_capi_uart_receive_dma(uart_priv, buf, len);
 
+	if (!uart_priv->use_irq)
+		return -ENOTSUP;
+
 	uart_priv->async_req = (mxc_uart_req_t) {
 		.uart = uart_priv->uart,
 		.rxData = buf,
@@ -646,6 +667,9 @@ int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
 
 	if (uart_priv->dma_handle)
 		return _max_capi_uart_transmit_dma(uart_priv, buf, len);
+
+	if (!uart_priv->use_irq)
+		return -ENOTSUP;
 
 	uart_priv->async_req = (mxc_uart_req_t) {
 		.uart = uart_priv->uart,
@@ -930,6 +954,220 @@ int max_capi_uart_get_line_status(struct capi_uart_handle *handle,
 }
 
 /**
+ * @brief Read a single byte from the RX FIFO. Non-blocking.
+ * @param handle The UART handle
+ * @param byte Where to store the received byte
+ * @return 1 if a byte was read, 0 if none available or on error
+ */
+uint32_t max_capi_uart_read_byte(struct capi_uart_handle *handle, uint8_t *byte)
+{
+	struct max_capi_uart_priv *uart_priv;
+	int c;
+
+	if (!handle || !handle->priv || !byte)
+		return 0;
+
+	uart_priv = handle->priv;
+
+	c = MXC_UART_ReadCharacterRaw(uart_priv->uart);
+	if (c < 0)
+		return 0;
+
+	*byte = (uint8_t)c;
+
+	return 1;
+}
+
+/**
+ * @brief Write a single byte to the TX FIFO. Non-blocking.
+ * @param handle The UART handle
+ * @param byte The byte to transmit
+ * @return 1 if the byte was queued, 0 if the FIFO was full or on error
+ */
+uint32_t max_capi_uart_write_byte(struct capi_uart_handle *handle, uint8_t byte)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv)
+		return 0;
+
+	uart_priv = handle->priv;
+
+	if (MXC_UART_WriteCharacterRaw(uart_priv->uart, byte) != E_NO_ERROR)
+		return 0;
+
+	return 1;
+}
+
+/**
+ * @brief Enable or disable the TX interrupt (buffer-empty)
+ * @param handle The UART handle
+ * @param enable true to enable, false to disable
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	if (!uart_priv->use_irq)
+		return -ENOTSUP;
+
+	if (enable)
+		MXC_UART_EnableInt(uart_priv->uart, MXC_F_UART_INTEN_TX_THD);
+
+	return 0;
+}
+
+/**
+ * @brief Check whether the TX FIFO can accept another byte.
+ * @param handle The UART handle
+ * @param ready Where to store the ready status
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_irq_tx_ready(struct capi_uart_handle *handle, bool *ready)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv || !ready)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	*ready = !(MXC_UART_GetStatus(uart_priv->uart) & MXC_F_UART_STATUS_TX_FULL);
+
+	return 0;
+}
+
+/**
+ * @brief Check whether transmission is fully complete (FIFO empty, not busy).
+ * @param handle The UART handle
+ * @param complete Where to store the completion status
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_irq_tx_complete(struct capi_uart_handle *handle, bool *complete)
+{
+	struct max_capi_uart_priv *uart_priv;
+	uint32_t status;
+
+	if (!handle || !handle->priv || !complete)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	status = MXC_UART_GetStatus(uart_priv->uart);
+	*complete = ((status & MXC_F_UART_STATUS_TX_EM) &&
+		    !(status & MXC_F_UART_STATUS_TX_BUSY));
+
+	return 0;
+}
+
+/**
+ * @brief Enable or disable the RX interrupt (data-available)
+ * @param handle The UART handle
+ * @param enable true to enable, false to disable
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_set_irq_rx(struct capi_uart_handle *handle, bool enable)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	if (!uart_priv->use_irq)
+		return -ENOTSUP;
+
+	if (enable) {
+		MXC_UART_EnableInt(uart_priv->uart, MXC_F_UART_INTEN_RX_THD |
+						    MXC_F_UART_INTEN_RX_FULL);
+	} else {
+		MXC_UART_DisableInt(uart_priv->uart, MXC_F_UART_INTEN_RX_THD |
+						     MXC_F_UART_INTEN_RX_FULL);
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Check whether received data is available on the RX FIFO
+ * @param handle The UART handle
+ * @param ready Where to store the data-ready status
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_irq_rx_ready(struct capi_uart_handle *handle, bool *ready)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv || !ready)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	*ready = !(MXC_UART_GetStatus(uart_priv->uart) & MXC_F_UART_STATUS_RX_EM);
+
+	return 0;
+}
+
+/**
+ * @brief Enable or disable the RX line-status (error) interrupt
+ * @param handle The UART handle
+ * @param enable true to enable, false to disable
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_set_irq_err(struct capi_uart_handle *handle, bool enable)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	if (!uart_priv->use_irq)
+		return -ENOTSUP;
+
+	if (enable) {
+		MXC_UART_EnableInt(uart_priv->uart, MXC_F_UART_INTEN_RX_FERR |
+						    MXC_F_UART_INTEN_RX_PAR |
+						    MXC_F_UART_INTEN_RX_OV);
+	} else {
+		MXC_UART_DisableInt(uart_priv->uart, MXC_F_UART_INTEN_RX_FERR |
+						     MXC_F_UART_INTEN_RX_PAR |
+						     MXC_F_UART_INTEN_RX_OV);
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Check whether any enabled UART interrupt is currently pending
+ * @param handle The UART handle
+ * @param pending Where to store the pending status
+ * @return 0 on success, negative error code otherwise
+ */
+int max_capi_uart_is_irq_pending(struct capi_uart_handle *handle, bool *pending)
+{
+	struct max_capi_uart_priv *uart_priv;
+
+	if (!handle || !handle->priv || !pending)
+		return -EINVAL;
+
+	uart_priv = handle->priv;
+
+	*pending = ((MXC_UART_GetFlags(uart_priv->uart) &
+			uart_priv->uart->inten) != 0);
+
+	return 0;
+}
+
+/**
  * @brief Enable/disable FIFO - not supported. UART FIFOs are always on
  * @param handle The UART handle
  * @param enable Whether to enable or disable
@@ -1011,6 +1249,15 @@ struct capi_uart_ops max_capi_uart_ops = {
 	.get_line_status = max_capi_uart_get_line_status,
 	/* Everything below cannot be implemented; returns -ENOSYS */
 	.enable_fifo = max_capi_uart_enable_fifo,
+	.read_byte = max_capi_uart_read_byte,
+	.write_byte = max_capi_uart_write_byte,
+	.set_irq_tx = max_capi_uart_set_irq_tx,
+	.irq_tx_ready = max_capi_uart_irq_tx_ready,
+	.irq_tx_complete = max_capi_uart_irq_tx_complete,
+	.set_irq_rx = max_capi_uart_set_irq_rx,
+	.irq_rx_ready = max_capi_uart_irq_rx_ready,
+	.set_irq_err = max_capi_uart_set_irq_err,
+	.is_irq_pending = max_capi_uart_is_irq_pending,
 	.transmit_9bit = max_capi_uart_transmit_9bit,
 	.receive_9bit = max_capi_uart_receive_9bit,
 	.set_flow_control_state = max_capi_uart_set_flow_control_state,

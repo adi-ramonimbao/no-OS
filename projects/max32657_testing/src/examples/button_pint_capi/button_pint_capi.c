@@ -1,6 +1,6 @@
 /***************************************************************************//**
- *   @file   button_irq_capi.c
- *   @brief  Button IRQ example using CAPI for MAX32657
+ *   @file   button_pint_capi.c
+ *   @brief  Button pin-interrupt example using CAPI PINT for MAX32657
  *   @author Ramon Miguel Imbao (ramonmiguel.imbao@analog.com)
 ********************************************************************************
  * Copyright 2026(c) Analog Devices, Inc.
@@ -38,9 +38,10 @@
 #include "capi_time.h"
 #include "capi_gpio.h"
 #include "capi_irq.h"
+#include "capi_pint.h"
 #include "capi_uart.h"
 #include "maxim_capi_gpio.h"
-#include "maxim_capi_irq.h"
+#include "maxim_capi_pint.h"
 #include "maxim_capi_uart.h"
 
 #define BUTTON_PORT 0
@@ -51,10 +52,10 @@
 
 static uint32_t count = 0;
 
-void button_callback(void *arg)
+void button_callback(uint8_t pin_index, void *user_data)
 {
 	count++;
-	printf("Button callback called! %d\r\n", count);
+	printf("Button callback called on pin %u! %d\r\n", pin_index, count);
 }
 
 int example_main(void)
@@ -74,6 +75,7 @@ int example_main(void)
 		.stop_bits = CAPI_UART_STOP_1_BIT,
 	};
 	struct capi_uart_config uart_capi_config = {
+		.identifier = 0,
 		.line_config = &uart_line_config,
 		.ops = &max_capi_uart_ops,
 		.extra = &uart_extra_config,
@@ -96,6 +98,23 @@ int example_main(void)
 	struct capi_irq_config irq_config = {
 		.irq_ctrl_id = 0,
 	};
+	/* PINT (pin interrupt) config */
+	struct capi_pint_port_handle *pint = NULL;
+	struct capi_pint_port_config pint_config = {
+		.ops = &max_capi_pint_ops,
+		.identifier = 0,
+		.num_pins = gpio_port_config.num_pins,
+	};
+	struct capi_pint_pin_config button_pint_config = {
+		.trigger_type = CAPI_PINT_TRIGGER_EDGE_FALLING,
+		.enabled = true,
+	};
+
+	/* Initialize IRQ first: capi_uart_init() connects its ISR via
+	 * capi_irq_connect(), which requires the IRQ layer to be initialized. */
+	ret = capi_irq_init(&irq_config);
+	if (ret && ret != -EBUSY)
+		return ret;
 
 	/* Initialize UART */
 	ret = capi_uart_init(&uart, &uart_capi_config);
@@ -133,29 +152,19 @@ int example_main(void)
 	if (ret)
 		return ret;
 
-	/* Initialize IRQ */
-	ret = capi_irq_init(&irq_config);
-	if (ret && ret != -EBUSY)
-		return ret;
-
-	/* Initialize GPIO0 IRQ */
-	ret = capi_irq_enable(MXC_GPIO_GET_IRQ(0));
+	/* Initialize the PINT port on top of the already-configured GPIO port */
+	printf("Initializing the PINT port\r\n");
+	ret = capi_pint_port_init(&pint, &pint_config);
 	if (ret)
 		return ret;
 
-	/* Connect the callback to the GPIO0 button pin */
-	ret = max_capi_gpio_irq_connect(&button_pin, button_callback, NULL);
+	/* Register the callback on the button pin */
+	ret = capi_pint_register_callback(pint, BUTTON_PIN, button_callback, NULL);
 	if (ret)
 		return ret;
 
-	/* Enable the interrupt on the button pin */
-	ret = max_capi_gpio_irq_enable(&button_pin);
-	if (ret)
-		return ret;
-
-	/* Set the edge trigger for the button pin */
-	ret = max_capi_gpio_irq_set_level_edge_trigger(&button_pin,
-						       CAPI_IRQ_EDGE_FALLING);
+	/* Configure the button pin trigger and enable its interrupt */
+	ret = capi_pint_configure_pin(pint, BUTTON_PIN, &button_pint_config);
 	if (ret)
 		return ret;
 
@@ -178,6 +187,11 @@ int example_main(void)
 		if (count >= 25)
 			break;
 	}
+
+	printf("Deinitializing the PINT port...\r\n");
+	ret = capi_pint_port_deinit(&pint);
+	if (ret)
+		return ret;
 
 	printf("Deinitializing IRQ...\r\n");
 	ret = capi_irq_deinit();

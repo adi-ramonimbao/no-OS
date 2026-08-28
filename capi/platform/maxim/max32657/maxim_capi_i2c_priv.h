@@ -122,8 +122,8 @@ struct max_capi_i2c_priv {
 	uint32_t identifier;
 	/** DMA controller handle */
 	struct capi_dma_handle *dma_handle;
-	/** For storing the platform-specific config */
-	struct max_capi_i2c_extra *extra;
+	/** Voltage level of the I3C peripheral */
+	enum max_capi_gpio_vssel vssel;
 	/** DMA callback function */
 	capi_i2c_callback callback;
 	/** DMA callback arg */
@@ -144,6 +144,8 @@ struct max_capi_i2c_priv {
 	struct capi_dma_chan *dma_channel_rx;
 	/** Async transfer flag */
 	volatile bool async_transfer_in_progress;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 
 };
 

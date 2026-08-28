@@ -184,6 +184,7 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	const struct max_capi_timer_extra *timer_extra;
 	enum max_capi_timer_bit_mode bit_mode = MAX_CAPI_TIMER_BIT_MODE_32BIT;
 	enum max_capi_timer_clock_source clock_source = MAX_CAPI_TIMER_CLOCK_APB;
+	bool use_irq = false;
 	mxc_tmr_clock_t msdk_clock;
 	uint32_t clock_hz;
 	uint32_t prescaler_div;
@@ -250,6 +251,7 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 	if (config->extra) {
 		timer_extra = config->extra;
 		bit_mode = timer_extra->bit_mode;
+		use_irq = timer_extra->use_irq;
 		if (bit_mode != MAX_CAPI_TIMER_BIT_MODE_32BIT &&
 		    bit_mode != MAX_CAPI_TIMER_BIT_MODE_16BIT_DUAL) {
 			ret = -EINVAL;
@@ -257,14 +259,20 @@ int max_capi_timer_init(struct capi_timer_handle **handle,
 		}
 	}
 
-	IRQn_Type timer_irq = MXC_TMR_GET_IRQ(timer_priv->identifier);
-	ret = capi_irq_connect(timer_irq, max_capi_timer_isr, timer_handle);
-	if (ret)
-		goto free_handle;
+	timer_priv->use_irq = false;
 
-	ret = capi_irq_enable(timer_irq);
-	if (ret)
-		goto free_handle;
+	if (use_irq) {
+		IRQn_Type timer_irq = MXC_TMR_GET_IRQ(timer_priv->identifier);
+		ret = capi_irq_connect(timer_irq, max_capi_timer_isr, timer_handle);
+		if (ret)
+			goto free_handle;
+
+		ret = capi_irq_enable(timer_irq);
+		if (ret)
+			goto free_handle;
+
+		timer_priv->use_irq = true;
+	}
 
 	timer_priv->bit_mode = bit_mode;
 
@@ -319,7 +327,8 @@ int max_capi_timer_deinit(struct capi_timer_handle *handle)
 		timer_priv->channel[1] = NULL;
 	}
 
-	capi_irq_disable(MXC_TMR_GET_IRQ(timer_priv->identifier));
+	if (timer_priv->use_irq)
+		capi_irq_disable(MXC_TMR_GET_IRQ(timer_priv->identifier));
 
 	if (handle->init_allocated) {
 		capi_free(handle->priv);
@@ -1071,6 +1080,9 @@ int max_capi_timer_event_irq_enable(struct capi_timer_handle *handle,
 	timer_priv = handle->priv;
 	tmr_reg = MXC_TMR_GET_TMR(timer_priv->identifier);
 
+	if (!timer_priv->use_irq)
+		return -ENOTSUP;
+
 	if (event >= CAPI_TIMER_GLOBAL_EVENT_LIMIT)
 		return -EINVAL;
 
@@ -1179,6 +1191,9 @@ int max_capi_timer_channel_irq_enable(struct capi_timer_handle *handle,
 
 	timer_priv = handle->priv;
 	tmr_reg = MXC_TMR_GET_TMR(timer_priv->identifier);
+
+	if (!timer_priv->use_irq)
+		return -ENOTSUP;
 
 	if (timer_priv->bit_mode == MAX_CAPI_TIMER_BIT_MODE_32BIT) {
 		if (chan != 0)

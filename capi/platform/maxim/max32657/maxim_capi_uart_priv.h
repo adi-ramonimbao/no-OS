@@ -50,6 +50,8 @@ struct max_capi_uart_priv {
 	struct capi_dma_chan *dma_channel_tx;
 	/** RX DMA channel */
 	struct capi_dma_chan *dma_channel_rx;
+	/** Whether to enable IRQ connection on init */
+	bool use_irq;
 };
 
 #define CAPI_UART_HANDLE_MAXIM_INIT()			\

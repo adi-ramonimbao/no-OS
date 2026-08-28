@@ -34,6 +34,8 @@ struct max_capi_rtc_priv {
 	uint32_t events_enabled;
 	/** RTC running state */
 	bool is_running;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 };
 
 #if defined(__cplusplus)

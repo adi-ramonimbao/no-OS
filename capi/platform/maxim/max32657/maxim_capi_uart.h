@@ -33,6 +33,8 @@ struct max_capi_uart_extra {
 	enum max_capi_gpio_vssel vssel;
 	/** OPTIONAL - DMA config */
 	struct capi_dma_config *dma_config;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 };
 
 extern struct capi_uart_ops max_capi_uart_ops;

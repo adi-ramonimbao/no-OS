@@ -36,93 +36,6 @@ static uint8_t zero_rx[1];
 /** Helper functions **********************************************************/
 
 /**
- * @brief Configure a SPI peripheral
- * @param handle The SPI handle
- * @return 0 in case of success, negative error code otherwise
- */
-int _max_capi_spi_config(struct capi_spi_controller_handle *handle)
-{
-	int ret;
-	struct max_capi_spi_priv *spi_priv;
-
-	spi_priv = handle->priv;
-	uint8_t spi_id = spi_priv->identifier;
-
-	mxc_spi_pins_t spi_pins_config = {
-		.clock = true,
-		.ss0 = (spi_priv->extra.chip_select & (1 << 0)) ? true : false,
-		.ss1 = (spi_priv->extra.chip_select & (1 << 1)) ? true : false,
-		.ss2 = (spi_priv->extra.chip_select & (1 << 2)) ? true : false,
-		.miso = true,
-		.mosi = true,
-		.sdio2 = false, /* sdio2 and sdio3 are ignored in spi_me30.c */
-		.sdio3 = false,
-		.vddioh = (spi_priv->extra.vssel == MAX_CAPI_GPIO_VSSEL_VDDIOH),
-	};
-
-	ret = MXC_SPI_Init(MXC_SPI_GET_SPI(spi_id),
-			   spi_priv->extra.device_role,
-			   (spi_priv->extra.bus_width == MAX_CAPI_SPI_BUS_WIDTH_QUAD) ? 1 : 0,
-			   spi_priv->extra.num_targets,
-			   spi_priv->extra.polarity_mask,
-			   spi_priv->clock_freq,
-			   spi_pins_config);
-	if (ret < 0) {
-		ret = -EINVAL;
-		goto error;
-	}
-
-	mxc_spi_mode_t spi_mode;
-	if (spi_priv->extra.clock_phase == MAX_CAPI_SPI_CLOCK_PHASE_0) {
-		if (spi_priv->extra.clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_0) {
-			spi_mode = SPI_MODE_0;
-		} else if (spi_priv->extra.clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_1) {
-			spi_mode = SPI_MODE_1;
-		} else {
-			ret = -EINVAL;
-			goto error;
-		}
-	} else if (spi_priv->extra.clock_phase == MAX_CAPI_SPI_CLOCK_PHASE_1) {
-		if (spi_priv->extra.clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_0) {
-			spi_mode = SPI_MODE_2;
-		} else if (spi_priv->extra.clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_1) {
-			spi_mode = SPI_MODE_3;
-		} else {
-			ret = -EINVAL;
-			goto error;
-		}
-	} else {
-		ret = -EINVAL;
-		goto error;
-	}
-	ret = MXC_SPI_SetMode(MXC_SPI_GET_SPI(spi_id), spi_mode);
-	if (ret) {
-		ret = -EINVAL;
-		goto error;
-	}
-
-	ret = MXC_SPI_SetWidth(MXC_SPI_GET_SPI(spi_id),
-			       (mxc_spi_width_t)spi_priv->extra.bus_width);
-	if (ret) {
-		ret = -EINVAL;
-		goto error;
-	}
-
-	ret = MXC_SPI_SetDataSize(MXC_SPI_GET_SPI(spi_id), 8);
-	if (ret) {
-		ret = -EINVAL;
-		goto error;
-	}
-
-	return 0;
-
-error:
-	MXC_SPI_Shutdown(MXC_SPI_GET_SPI(spi_id));
-
-	return ret;
-}
-
-/**
  * @brief Set the closest first and last SCLK delays to what was requested
  * @param device The SPI device
  * @param transfer The SPI transfer
@@ -146,8 +59,8 @@ void _max_capi_delay_config(struct capi_spi_device *device,
 	spi_freq = MXC_SPI_GetPeripheralClock(spi_reg);
 	ns_per_tick = (1000000000UL / spi_freq);
 
-	delay_first_ns = spi_priv->extra.platform_delays.cs_delay_first;
-	delay_last_ns = spi_priv->extra.platform_delays.cs_delay_last;
+	delay_first_ns = spi_priv->platform_delays.cs_delay_first;
+	delay_last_ns = spi_priv->platform_delays.cs_delay_last;
 
 	// TODO: Add transfer->xfer_delay_clk_cycles to these?
 	delay_first_ticks = (delay_first_ns / ns_per_tick);
@@ -734,6 +647,18 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	int ret;
 	struct capi_spi_controller_handle *spi_handle;
 	struct max_capi_spi_priv *spi_priv;
+	enum max_capi_spi_device_role device_role;
+	enum max_capi_spi_bus_width bus_width;
+	uint32_t num_targets;
+	uint8_t polarity_mask;
+	uint8_t chip_select;
+	enum max_capi_gpio_vssel vssel;
+	enum max_capi_spi_clock_phase clock_phase;
+	enum max_capi_spi_clock_polarity clock_polarity;
+	struct capi_dma_config *dma_config;
+	bool use_irq;
+	mxc_spi_pins_t spi_pins_config;
+	mxc_spi_mode_t spi_mode;
 	uint8_t spi_id;
 
 	if (!handle || !config)
@@ -783,46 +708,128 @@ int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	spi_priv->dma_handle = NULL;
 	spi_priv->callback = NULL;
 	spi_priv->callback_arg = NULL;
+	spi_priv->use_irq = false;
 	spi_id = spi_priv->identifier;
 
-	/* Copy user config or set defaults */
+	/* Resolve config from config->extra, or use defaults */
 	if (config->extra) {
-		spi_priv->extra = *(struct max_capi_spi_extra *)config->extra;
+		struct max_capi_spi_extra *extra = config->extra;
+
+		device_role = extra->device_role;
+		bus_width = extra->bus_width;
+		num_targets = extra->num_targets;
+		polarity_mask = extra->polarity_mask;
+		chip_select = extra->chip_select;
+		vssel = extra->vssel;
+		clock_phase = extra->clock_phase;
+		clock_polarity = extra->clock_polarity;
+		dma_config = extra->dma_config;
+		use_irq = extra->use_irq;
+		spi_priv->platform_delays = extra->platform_delays;
 	} else {
-		spi_priv->extra.device_role = MAX_CAPI_SPI_DEVICE_ROLE_CONTROLLER;
-		spi_priv->extra.bus_width = MAX_CAPI_SPI_BUS_WIDTH_STANDARD;
-		spi_priv->extra.num_targets = 1;
-		spi_priv->extra.polarity_mask = 0;
-		spi_priv->extra.chip_select = MAX_CAPI_SPI_CS0;
-		spi_priv->extra.vssel = MAX_CAPI_GPIO_VSSEL_VDDIO;
-		spi_priv->extra.clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0;
-		spi_priv->extra.clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0;
-		spi_priv->extra.platform_delays.cs_delay_first = 0;
-		spi_priv->extra.platform_delays.cs_delay_last = 0;
-		spi_priv->extra.dma_config = NULL;
+		device_role = MAX_CAPI_SPI_DEVICE_ROLE_CONTROLLER;
+		bus_width = MAX_CAPI_SPI_BUS_WIDTH_STANDARD;
+		num_targets = 1;
+		polarity_mask = 0;
+		chip_select = MAX_CAPI_SPI_CS0;
+		vssel = MAX_CAPI_GPIO_VSSEL_VDDIO;
+		clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0;
+		clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0;
+		dma_config = NULL;
+		use_irq = false;
+		spi_priv->platform_delays.cs_delay_first = 0;
+		spi_priv->platform_delays.cs_delay_last = 0;
 	}
 
-	ret = _max_capi_spi_config(spi_handle);
-	if (ret)
-		goto shutdown_spi;
+	spi_priv->chip_select = chip_select;
 
-	if (config->dma_handle && spi_priv->extra.dma_config) {
+	spi_pins_config = (mxc_spi_pins_t) {
+		.clock = true,
+		.ss0 = (chip_select & (1 << 0)) ? true : false,
+		.ss1 = (chip_select & (1 << 1)) ? true : false,
+		.ss2 = (chip_select & (1 << 2)) ? true : false,
+		.miso = true,
+		.mosi = true,
+		.sdio2 = false, /* sdio2 and sdio3 are ignored in spi_me30.c */
+		.sdio3 = false,
+		.vddioh = (vssel == MAX_CAPI_GPIO_VSSEL_VDDIOH),
+	};
+
+	ret = MXC_SPI_Init(MXC_SPI_GET_SPI(spi_id),
+			   device_role,
+			   (bus_width == MAX_CAPI_SPI_BUS_WIDTH_QUAD) ? 1 : 0,
+			   num_targets,
+			   polarity_mask,
+			   spi_priv->clock_freq,
+			   spi_pins_config);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto shutdown_spi;
+	}
+
+	if (clock_phase == MAX_CAPI_SPI_CLOCK_PHASE_0) {
+		if (clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_0) {
+			spi_mode = SPI_MODE_0;
+		} else if (clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_1) {
+			spi_mode = SPI_MODE_1;
+		} else {
+			ret = -EINVAL;
+			goto shutdown_spi;
+		}
+	} else if (clock_phase == MAX_CAPI_SPI_CLOCK_PHASE_1) {
+		if (clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_0) {
+			spi_mode = SPI_MODE_2;
+		} else if (clock_polarity == MAX_CAPI_SPI_CLOCK_POLARITY_1) {
+			spi_mode = SPI_MODE_3;
+		} else {
+			ret = -EINVAL;
+			goto shutdown_spi;
+		}
+	} else {
+		ret = -EINVAL;
+		goto shutdown_spi;
+	}
+
+	ret = MXC_SPI_SetMode(MXC_SPI_GET_SPI(spi_id), spi_mode);
+	if (ret) {
+		ret = -EINVAL;
+		goto shutdown_spi;
+	}
+
+	ret = MXC_SPI_SetWidth(MXC_SPI_GET_SPI(spi_id),
+			       (mxc_spi_width_t)bus_width);
+	if (ret) {
+		ret = -EINVAL;
+		goto shutdown_spi;
+	}
+
+	ret = MXC_SPI_SetDataSize(MXC_SPI_GET_SPI(spi_id), 8);
+	if (ret) {
+		ret = -EINVAL;
+		goto shutdown_spi;
+	}
+
+	if (config->dma_handle && dma_config) {
 		spi_priv->dma_handle = config->dma_handle;
 
 		ret = capi_dma_init(&spi_priv->dma_handle,
-				    spi_priv->extra.dma_config);
+				    dma_config);
 		if (ret)
 			goto shutdown_spi;
 	}
 
-	IRQn_Type spi_irq = MXC_SPI_GET_IRQ(spi_id);
-	ret = capi_irq_connect(spi_irq, max_capi_spi_isr, spi_handle);
-	if (ret)
-		goto deinit_dma;
+	if (use_irq) {
+		IRQn_Type spi_irq = MXC_SPI_GET_IRQ(spi_id);
+		ret = capi_irq_connect(spi_irq, max_capi_spi_isr, spi_handle);
+		if (ret)
+			goto deinit_dma;
 
-	ret = capi_irq_enable(spi_irq);
-	if (ret)
-		goto deinit_dma;
+		ret = capi_irq_enable(spi_irq);
+		if (ret)
+			goto deinit_dma;
+
+		spi_priv->use_irq = true;
+	}
 
 	spi[config->identifier] = spi_handle;
 	*handle = spi_handle;
@@ -874,7 +881,9 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_rx);
 	_max_capi_spi_dma_cleanup_channel(&spi_priv->dma_channel_tx);
 
-	capi_irq_disable(MXC_SPI_GET_IRQ(spi_id));
+	if (spi_priv->use_irq) {
+		capi_irq_disable(MXC_SPI_GET_IRQ(spi_id));
+	}
 
 	if (handle->init_allocated) {
 		capi_free(spi_priv);
@@ -924,10 +933,16 @@ int max_capi_spi_transceive_async(struct capi_spi_device *device,
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
-	if (spi_priv->dma_handle)
+	if (spi_priv->dma_handle) {
 		return _max_capi_spi_transceive_dma(device, transfer, true);
-	else
-		return _max_capi_spi_transceive_fifo(device, transfer, true, false);
+	} else {
+		if (spi_priv->use_irq) {
+			return _max_capi_spi_transceive_fifo(device, transfer,
+							     true, false);
+		} else {
+			return -ENOTSUP;
+		}
+	}
 }
 
 /**
@@ -991,10 +1006,16 @@ int max_capi_spi_read_command_async(struct capi_spi_device *device,
 		return -EINVAL;
 
 	spi_priv = device->controller->priv;
-	if (spi_priv->dma_handle)
+	if (spi_priv->dma_handle) {
 		return -ENOTSUP;
-	else
-		return _max_capi_spi_transceive_fifo(device, transfer, true, true);
+	} else {
+		if (spi_priv->use_irq) {
+			return _max_capi_spi_transceive_fifo(device, transfer,
+							     true, true);
+		} else {
+			return -ENOTSUP;
+		}
+	}
 }
 
 /**
@@ -1068,7 +1089,7 @@ int max_capi_spi_set_cs(struct capi_spi_device *device,
 
 	case CAPI_SPI_CS_MANUAL_ASSERT:
 		spi_reg->ctrl0 &= ~MXC_F_SPI_CTRL0_TS_CTRL;
-		MXC_SPI_SetSlave(spi_reg, spi_priv->extra.chip_select);
+		MXC_SPI_SetSlave(spi_reg, spi_priv->chip_select);
 		spi_reg->ctrl0 |= MXC_F_SPI_CTRL0_START;
 		break;
 

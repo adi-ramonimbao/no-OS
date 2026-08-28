@@ -31,6 +31,10 @@ config CAPI_IRQ
 	bool "CAPI IRQ"
 	default n
 
+config CAPI_PINT
+	bool "CAPI PINT (pin interrupt)"
+	default n
+
 config CAPI_SPI
 	bool "CAPI SPI"
 	default n

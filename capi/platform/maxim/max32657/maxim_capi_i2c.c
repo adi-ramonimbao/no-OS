@@ -115,7 +115,6 @@ static int _max_capi_i2c_configure_hardware(struct max_capi_i2c_priv *i2c_priv,
 		bool target_mode,
 		uint32_t addr_or_freq)
 {
-	struct max_capi_i2c_extra *i2c_extra = i2c_priv->extra;
 	struct max_capi_i2c_target_state *target = i2c_priv->target;
 	uint8_t i2c_id = i2c_priv->identifier;
 	mxc_i3c_config_t i3c_config;
@@ -168,7 +167,7 @@ static int _max_capi_i2c_configure_hardware(struct max_capi_i2c_priv *i2c_priv,
 	}
 
 	i3c_pins = gpio_cfg_i3c;
-	i3c_pins.vssel = (mxc_gpio_vssel_t)i2c_extra->vssel;
+	i3c_pins.vssel = (mxc_gpio_vssel_t)i2c_priv->vssel;
 	MXC_GPIO_Config(&i3c_pins);
 
 	return 0;
@@ -967,10 +966,12 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	int ret;
 	struct capi_i2c_controller_handle *i2c_handle;
 	struct max_capi_i2c_priv *i2c_priv;
-	struct max_capi_i2c_extra *i2c_extra;
+	enum max_capi_gpio_vssel vssel;
+	struct capi_dma_config *dma_config;
+	bool use_irq;
 	uint8_t i2c_id;
 
-	if (!handle || !config || !config->extra)
+	if (!handle || !config)
 		return -EINVAL;
 
 	if (config->identifier >= MXC_CFG_I3C_INSTANCES)
@@ -1006,9 +1007,22 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	}
 
 	i2c_handle->ops = config->ops;
-	i2c_extra = config->extra;
+
+	if (config->extra) {
+		struct max_capi_i2c_extra *extra = config->extra;
+
+		vssel = extra->vssel;
+		dma_config = extra->dma_config;
+		use_irq = extra->use_irq;
+	} else {
+		vssel = MAX_CAPI_GPIO_VSSEL_VDDIO;
+		dma_config = NULL;
+		use_irq = false;
+	}
+
 	i2c_priv->identifier = config->identifier;
-	i2c_priv->extra = i2c_extra;
+	i2c_priv->vssel = vssel;
+	i2c_priv->use_irq = false;
 	i2c_priv->dma_handle = NULL;
 	i2c_priv->callback = NULL;
 	i2c_priv->callback_arg = NULL;
@@ -1034,23 +1048,27 @@ int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	if (ret)
 		goto shutdown_i2c;
 
-	if (config->dma_handle && i2c_extra->dma_config) {
+	if (config->dma_handle && dma_config) {
 		i2c_priv->dma_handle = config->dma_handle;
 
 		ret = capi_dma_init(&i2c_priv->dma_handle,
-				    i2c_extra->dma_config);
+				    dma_config);
 		if (ret)
 			goto shutdown_i2c;
 	}
 
-	IRQn_Type i2c_irq = MXC_I3C_GET_IRQ(i2c_id);
-	ret = capi_irq_connect(i2c_irq, max_capi_i2c_isr, i2c_handle);
-	if (ret)
-		goto cleanup_channels;
+	if (use_irq) {
+		IRQn_Type i2c_irq = MXC_I3C_GET_IRQ(i2c_id);
+		ret = capi_irq_connect(i2c_irq, max_capi_i2c_isr, i2c_handle);
+		if (ret)
+			goto cleanup_channels;
 
-	ret = capi_irq_enable(i2c_irq);
-	if (ret)
-		goto cleanup_channels;
+		ret = capi_irq_enable(i2c_irq);
+		if (ret)
+			goto cleanup_channels;
+
+		i2c_priv->use_irq = true;
+	}
 
 	i2c[config->identifier] = i2c_handle;
 	*handle = i2c_handle;
@@ -1129,7 +1147,8 @@ int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 		i2c_priv->async_transfer_in_progress = false;
 	}
 
-	capi_irq_disable(MXC_I3C_GET_IRQ(i2c_id));
+	if (i2c_priv->use_irq)
+		capi_irq_disable(MXC_I3C_GET_IRQ(i2c_id));
 
 	ret = MXC_I3C_Shutdown(i3c);
 
@@ -1386,8 +1405,10 @@ int max_capi_i2c_transmit_async(struct capi_i2c_device *device,
 
 		if (i2c_priv->dma_handle)
 			ret = _max_capi_i2c_transmit_dma(i2c_priv, i3c, i2c_priv->async);
-		else
+		else if (i2c_priv->use_irq)
 			ret = _max_capi_i2c_transmit_fifo(i3c, i2c_priv->async);
+		else
+			ret = -ENOTSUP;
 
 		if (ret)
 			_max_capi_i2c_reset_async_state(i2c_priv);
@@ -1436,8 +1457,10 @@ int max_capi_i2c_receive_async(struct capi_i2c_device *device,
 
 		if (i2c_priv->dma_handle)
 			ret = _max_capi_i2c_receive_dma(i2c_priv, i3c, i2c_priv->async);
-		else
+		else if (i2c_priv->use_irq)
 			ret = _max_capi_i2c_receive_fifo(i3c, i2c_priv->async);
+		else
+			ret = -ENOTSUP;
 
 		if (ret)
 			_max_capi_i2c_reset_async_state(i2c_priv);
@@ -1497,6 +1520,9 @@ int max_capi_i2c_register_target(struct capi_i2c_controller_handle *handle,
 
 	i2c_priv = handle->priv;
 	i2c_id = i2c_priv->identifier;
+
+	if (!i2c_priv->use_irq)
+		return -ENOTSUP;
 
 	if (i2c_priv->target != NULL && i2c_priv->target->enabled)
 		return -EBUSY;

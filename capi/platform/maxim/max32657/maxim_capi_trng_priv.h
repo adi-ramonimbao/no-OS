@@ -24,6 +24,8 @@ struct max_capi_trng_priv {
 	void *callback_arg;
 	/** Async in progress */
 	volatile bool busy;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 };
 
 #if defined(__cplusplus)

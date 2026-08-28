@@ -112,6 +112,8 @@ struct max_capi_spi_extra {
 	struct max_capi_spi_delays platform_delays;
 	/** OPTIONAL - DMA config parameters */
 	struct capi_dma_config *dma_config;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 };
 
 extern const struct capi_spi_ops max_capi_spi_ops;

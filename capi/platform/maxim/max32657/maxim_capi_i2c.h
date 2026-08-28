@@ -40,6 +40,9 @@ struct max_capi_i2c_extra {
 	enum max_capi_gpio_vssel vssel;
 	/** OPTIONAL - DMA config parameters */
 	struct capi_dma_config *dma_config;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
+
 };
 
 extern const struct capi_i2c_ops max_capi_i2c_ops;

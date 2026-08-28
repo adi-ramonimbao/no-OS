@@ -4,15 +4,20 @@ choice MAX32657_TESTING_EXAMPLE
 	prompt "Example variant"
 	default MAX32657_TESTING_BLINKY_EXAMPLE
 
+config MAX32657_TESTING_ADXL367_EXAMPLE
+	bool "ADXL367 example"
+	help
+	  ADXL367 accelerometer ID read over I2C (CAPI)
+
 config MAX32657_TESTING_BLINKY_EXAMPLE
 	bool "Blinky example"
 	help
 	  Blinky CAPI example
 
-config MAX32657_TESTING_BUTTON_IRQ_EXAMPLE
-	bool "Button IRQ example"
+config MAX32657_TESTING_BUTTON_PINT_EXAMPLE
+	bool "Button PINT example"
 	help
-	  Button IRQ example
+	  Button pin-interrupt example using the CAPI PINT driver
 
 config MAX32657_TESTING_BUTTON_POLLING_EXAMPLE
 	bool "Button (polling) example"

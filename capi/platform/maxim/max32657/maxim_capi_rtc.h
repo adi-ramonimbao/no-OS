@@ -25,6 +25,8 @@ extern "C" {
 struct max_capi_rtc_extra {
 	/** Whether to measure the crystal frequency on startup and during trim */
 	bool measure_freq;
+	/** Whether to enable IRQ connection during init */
+	bool use_irq;
 };
 
 extern const struct capi_rtc_ops max_capi_rtc_ops;
