@@ -28,6 +28,8 @@ struct max_capi_dma_priv {
 	struct capi_dma_chan **channels;
 	/** Number of channels storage */
 	uint8_t num_channels;
+	/** Whether channel IRQs are connected/enabled */
+	bool use_irq;
 };
 
 /**

@@ -122,6 +122,7 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 	}
 
 	dma_priv->id = config->id;
+	dma_priv->use_irq = (config->irq_handle != NULL);
 	dma_handle->ops = config->ops;
 
 	dma = dma_handle;
@@ -163,9 +164,11 @@ int max_capi_dma_deinit(struct capi_dma_handle *handle)
 
 	MXC_DMA1_S->inten &= ~((1 << MXC_DMA_CHANNELS) - 1);
 
-	for (i = 0; i < MXC_DMA_CHANNELS; i++) {
-		irq = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, i);
-		capi_irq_disable(irq);
+	if (dma_priv->use_irq) {
+		for (i = 0; i < MXC_DMA_CHANNELS; i++) {
+			irq = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, i);
+			capi_irq_disable(irq);
+		}
 	}
 
 	capi_free(dma_priv->channels);
@@ -235,14 +238,16 @@ int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 	chan->irq_num = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, hw_id);
 	chan->extra = ch_priv;
 
-	ret = capi_irq_connect(chan->irq_num,
-			       max_capi_dma_isr_callback, chan);
-	if (ret)
-		goto free_channel_priv;
+	if (dma_priv->use_irq) {
+		ret = capi_irq_connect(chan->irq_num,
+				       max_capi_dma_isr_callback, chan);
+		if (ret)
+			goto free_channel_priv;
 
-	ret = capi_irq_enable(chan->irq_num);
-	if (ret)
-		goto free_channel_priv;
+		ret = capi_irq_enable(chan->irq_num);
+		if (ret)
+			goto free_channel_priv;
+	}
 
 	dma_priv->channels[id] = chan;
 	*chan_ptr = chan;
@@ -276,7 +281,8 @@ int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 	dma_priv = chan->handle->priv;
 	ch_priv = chan->extra;
 
-	capi_irq_disable(chan->irq_num);
+	if (dma_priv->use_irq)
+		capi_irq_disable(chan->irq_num);
 
 	ret = MXC_DMA_ReleaseChannel(ch_priv->hw_channel_id);
 
@@ -368,9 +374,11 @@ int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
 
 	ch_priv->completed = false;
 
-	/*  MXC_DMA_ConfigChannel explicitly sets the CTRL register for a
-	    channel. We have to call MXC_DMA_ChannelEnableInt again to add the
-	    MXC_F_DMA_CTRL_CTZ_IE flag. */
+	/*
+	 * MXC_DMA_ConfigChannel explicitly sets the CTRL register for a
+	 * channel. We have to call MXC_DMA_ChannelEnableInt again to add the
+	 * MXC_F_DMA_CTRL_CTZ_IE flag.
+	 */
 	MXC_DMA_EnableInt(MXC_DMA1_S, ch_priv->hw_channel_id);
 	MXC_DMA_ChannelEnableInt(ch_priv->hw_channel_id, MXC_F_DMA_CTRL_CTZ_IE);
 
@@ -386,7 +394,7 @@ int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
  */
 int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
 {
-	int ret;
+	int ret, flags;
 	struct max_capi_dma_ch_priv *ch_priv;
 
 	if (!chan || !chan->extra)
@@ -395,6 +403,11 @@ int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
 	ch_priv = chan->extra;
 
 	ch_priv->completed = false;
+
+	/* Clear stale status so polled completion reflects this transfer */
+	flags = MXC_DMA_ChannelGetFlags(ch_priv->hw_channel_id);
+	if (flags > 0)
+		MXC_DMA_ChannelClearFlags(ch_priv->hw_channel_id, flags);
 
 	ret = MXC_DMA_Start(ch_priv->hw_channel_id);
 	if (ret)
@@ -432,12 +445,21 @@ int max_capi_dma_xfer_abort(struct capi_dma_chan *chan)
  */
 bool max_capi_dma_chan_is_completed(const struct capi_dma_chan *chan)
 {
+	struct max_capi_dma_priv *dma_priv;
 	struct max_capi_dma_ch_priv *ch_priv;
+	int flags;
 
-	if (!chan || !chan->extra)
+	if (!chan || !chan->extra || !chan->handle || !chan->handle->priv)
 		return false;
 
+	dma_priv = chan->handle->priv;
 	ch_priv = chan->extra;
+
+	if (!dma_priv->use_irq) {
+		flags = MXC_DMA_ChannelGetFlags(ch_priv->hw_channel_id);
+		if (flags >= 0 && (flags & MXC_F_DMA_STATUS_CTZ_IF))
+			ch_priv->completed = true;
+	}
 
 	return ch_priv->completed;
 }
