@@ -18,6 +18,15 @@
 #include "capi_alloc.h"
 #include "max32657.h"
 
+#ifdef CONFIG_CAPI_WDT_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_WDT_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_wdt, max_capi_wdt, name)
+#else
+#define MAX_WDT_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_wdt_handle *wdt[MXC_CFG_WDT_INSTANCES] = {NULL};
@@ -200,6 +209,7 @@ free_handle:
 
 	return ret;
 }
+MAX_WDT_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the WDT peripheral
@@ -232,6 +242,7 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
 
 	return ret;
 }
+MAX_WDT_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Get available channels for WDT. In the case of MAX32657, it is single
@@ -249,6 +260,7 @@ int max_capi_wdt_get_chan_count(struct capi_wdt_handle *handle, int *channels)
 
 	return 0;
 }
+MAX_WDT_DIRECT_ALIAS(get_chan_count)
 
 /**
  * @brief Set up a WDT channel. Does not start the WDT.
@@ -346,6 +358,7 @@ int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
 
 	return 0;
 }
+MAX_WDT_DIRECT_ALIAS(setup_chan)
 
 /**
  * @brief Disable a channel. Feed is required to restart.
@@ -372,6 +385,7 @@ int max_capi_wdt_disable_chan(struct capi_wdt_handle *handle, int chan_id)
 
 	return 0;
 }
+MAX_WDT_DIRECT_ALIAS(disable_chan)
 
 /**
  * @brief Feed (restart) a channel
@@ -418,6 +432,7 @@ int max_capi_wdt_feed_chan(struct capi_wdt_handle *handle, int chan_id)
 
 	return 0;
 }
+MAX_WDT_DIRECT_ALIAS(feed_chan)
 
 /**
  * @brief The ISR for the WDT peripheral
@@ -454,6 +469,7 @@ void max_capi_wdt_isr(void *handle)
 	/* Acknowledge the interrupt; reset-cause flags are left for the app */
 	MXC_WDT_ClearIntFlag(MXC_WDT);
 }
+MAX_WDT_DIRECT_ALIAS(isr)
 
 struct capi_wdt_ops max_capi_wdt_ops = {
 	.init = max_capi_wdt_init,
@@ -464,6 +480,7 @@ struct capi_wdt_ops max_capi_wdt_ops = {
 	.feed_chan = max_capi_wdt_feed_chan,
 	.isr = max_capi_wdt_isr,
 };
+
 
 /** Platform-specific functions ***********************************************/
 

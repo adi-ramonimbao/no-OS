@@ -17,6 +17,15 @@
 #include "capi_alloc.h"
 #include "capi_irq.h"
 
+#ifdef CONFIG_CAPI_PINT_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_PINT_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_pint, max_capi_pint, name)
+#else
+#define MAX_PINT_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_pint_port_handle *pint[MXC_CFG_GPIO_INSTANCES] = {NULL};
@@ -130,6 +139,7 @@ static int max_capi_pint_port_init(struct capi_pint_port_handle **handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(port_init)
 
 /**
  * @brief Deinitialize a PINT port
@@ -169,6 +179,7 @@ static int max_capi_pint_port_deinit(struct capi_pint_port_handle **handle)
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(port_deinit)
 
 /**
  * @brief Configure a pin's interrupt trigger and enable state
@@ -227,6 +238,7 @@ static int max_capi_pint_configure_pin(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(configure_pin)
 
 /**
  * @brief Enable the interrupt on a specific pin
@@ -251,6 +263,7 @@ static int max_capi_pint_enable_pin(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(enable_pin)
 
 /**
  * @brief Disable the interrupt on a specific pin
@@ -275,6 +288,7 @@ static int max_capi_pint_disable_pin(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(disable_pin)
 
 /**
  * @brief Register a callback for a specific pin
@@ -314,6 +328,7 @@ static int max_capi_pint_register_callback(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Unregister a pin's callback
@@ -346,6 +361,7 @@ static int max_capi_pint_unregister_callback(struct capi_pint_port_handle *handl
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(unregister_callback)
 
 /**
  * @brief Clear a pin's pending interrupt flag
@@ -369,6 +385,7 @@ static int max_capi_pint_clear_pending(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(clear_pending)
 
 /**
  * @brief Get the port's pending interrupt bitmask
@@ -389,6 +406,7 @@ static int max_capi_pint_get_pending(struct capi_pint_port_handle *handle,
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(get_pending)
 
 /**
  * @brief Handle the port interrupt (call from the GPIO ISR)
@@ -409,6 +427,7 @@ static int max_capi_pint_handle_interrupt(struct capi_pint_port_handle *handle)
 
 	return 0;
 }
+MAX_PINT_DIRECT_ALIAS(handle_interrupt)
 
 const struct capi_pint_ops max_capi_pint_ops = {
 	.port_init = max_capi_pint_port_init,
@@ -422,3 +441,4 @@ const struct capi_pint_ops max_capi_pint_ops = {
 	.get_pending = max_capi_pint_get_pending,
 	.handle_interrupt = max_capi_pint_handle_interrupt,
 };
+

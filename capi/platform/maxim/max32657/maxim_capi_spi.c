@@ -19,6 +19,15 @@
 #include "maxim_capi_gpio.h"
 #include "spi.h"
 
+#ifdef CONFIG_CAPI_SPI_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_SPI_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_spi, max_capi_spi, name)
+#else
+#define MAX_SPI_DIRECT_ALIAS(name)
+#endif
+
 #define MAX_DELAY_SCLK 255
 
 /** Forward declarations ******************************************************/
@@ -852,6 +861,7 @@ shutdown_spi:
 
 	return ret;
 }
+MAX_SPI_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the SPI peripheral
@@ -894,6 +904,7 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 
 	return 0;
 }
+MAX_SPI_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Perform blocking SPI transfer
@@ -915,6 +926,7 @@ int max_capi_spi_transceive(struct capi_spi_device *device,
 	else
 		return _max_capi_spi_transceive_fifo(device, transfer, false, false);
 }
+MAX_SPI_DIRECT_ALIAS(transceive)
 
 /**
  * @brief Perform non-blocking SPI transfer
@@ -944,6 +956,7 @@ int max_capi_spi_transceive_async(struct capi_spi_device *device,
 		}
 	}
 }
+MAX_SPI_DIRECT_ALIAS(transceive_async)
 
 /**
  * @brief Register a callback for async transactions
@@ -967,6 +980,7 @@ int max_capi_spi_register_callback(struct capi_spi_controller_handle *handle,
 
 	return 0;
 }
+MAX_SPI_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Send a command/address, then reads data - all in one CS assertion,
@@ -989,6 +1003,7 @@ int max_capi_spi_read_command(struct capi_spi_device *device,
 	else
 		return _max_capi_spi_transceive_fifo(device, transfer, false, true);
 }
+MAX_SPI_DIRECT_ALIAS(read_command)
 
 /**
  * @brief Send a command/address, then reads data - all in one CS assertion,
@@ -1017,6 +1032,7 @@ int max_capi_spi_read_command_async(struct capi_spi_device *device,
 		}
 	}
 }
+MAX_SPI_DIRECT_ALIAS(read_command_async)
 
 /**
  * @brief Abort an async transaction
@@ -1060,6 +1076,7 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
 
 	return 0;
 }
+MAX_SPI_DIRECT_ALIAS(abort_async)
 
 /**
  * @brief Manually assert/deassert chip select, or restore to auto mode
@@ -1104,6 +1121,7 @@ int max_capi_spi_set_cs(struct capi_spi_device *device,
 
 	return 0;
 }
+MAX_SPI_DIRECT_ALIAS(set_cs)
 
 void max_capi_spi_isr(void *handle)
 {
@@ -1217,6 +1235,7 @@ void max_capi_spi_isr(void *handle)
 	/* Clear all interrupt flags that were handled */
 	spi_reg->intfl = interrupt_flags;
 }
+MAX_SPI_DIRECT_ALIAS(isr)
 
 const struct capi_spi_ops max_capi_spi_ops = {
 	.init = max_capi_spi_init,
@@ -1230,3 +1249,4 @@ const struct capi_spi_ops max_capi_spi_ops = {
 	.set_cs = max_capi_spi_set_cs,
 	.isr = max_capi_spi_isr,
 };
+

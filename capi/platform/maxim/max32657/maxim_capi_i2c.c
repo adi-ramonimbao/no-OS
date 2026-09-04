@@ -19,6 +19,15 @@
 #include "maxim_capi_irq.h"
 #include "i3c.h"
 
+#ifdef CONFIG_CAPI_I2C_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_I2C_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, max_capi_i2c, name)
+#else
+#define MAX_I2C_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_i2c_controller_handle *i2c[MXC_CFG_I3C_INSTANCES] = {NULL};
@@ -1095,6 +1104,7 @@ free_handle:
 
 	return ret;
 }
+MAX_I2C_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the I3C peripheral
@@ -1169,6 +1179,7 @@ int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Transmit function
@@ -1236,6 +1247,7 @@ int max_capi_i2c_transmit(struct capi_i2c_device *device,
 		return 0;
 	}
 }
+MAX_I2C_DIRECT_ALIAS(transmit)
 
 
 /**
@@ -1296,6 +1308,7 @@ int max_capi_i2c_receive(struct capi_i2c_device *device,
 		return 0;
 	}
 }
+MAX_I2C_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register a callback
@@ -1319,6 +1332,7 @@ int max_capi_i2c_register_callback(struct capi_i2c_controller_handle *handle,
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Configures the I2C bus speed
@@ -1373,6 +1387,7 @@ int max_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle *handle,
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(configure_bus_speed)
 
 /**
  * @brief Async transmit function
@@ -1416,6 +1431,7 @@ int max_capi_i2c_transmit_async(struct capi_i2c_device *device,
 		return ret;
 	}
 }
+MAX_I2C_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Async receive function
@@ -1468,6 +1484,7 @@ int max_capi_i2c_receive_async(struct capi_i2c_device *device,
 		return ret;
 	}
 }
+MAX_I2C_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Attempt to recover the I2C bus
@@ -1492,6 +1509,7 @@ int max_capi_i2c_recover_bus(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(recover_bus)
 
 /**
  * @brief Register the I2C controller in target mode
@@ -1553,6 +1571,7 @@ int max_capi_i2c_register_target(struct capi_i2c_controller_handle *handle,
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(register_target)
 
 /**
  * @brief Unregister the I2C controller from target mode
@@ -1592,6 +1611,7 @@ int max_capi_i2c_unregister_target(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+MAX_I2C_DIRECT_ALIAS(unregister_target)
 
 /**
  * @brief The function called during an interrupt
@@ -1629,6 +1649,7 @@ void max_capi_i2c_isr(void *handle)
 			MXC_I3C_Controller_ClearFlags(i3c, controller_flags);
 	}
 }
+MAX_I2C_DIRECT_ALIAS(isr)
 
 const struct capi_i2c_ops max_capi_i2c_ops = {
 	.init = max_capi_i2c_init,
@@ -1644,3 +1665,4 @@ const struct capi_i2c_ops max_capi_i2c_ops = {
 	.unregister_target = max_capi_i2c_unregister_target,
 	.isr = max_capi_i2c_isr,
 };
+

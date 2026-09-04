@@ -19,6 +19,15 @@
 #include "maxim_capi_uart_priv.h"
 #include <sys/stat.h>
 
+#ifdef CONFIG_CAPI_UART_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_UART_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, max_capi_uart, name)
+#else
+#define MAX_UART_DIRECT_ALIAS(name)
+#endif
+
 /** Static declarations *******************************************************/
 
 static struct capi_uart_handle *uart[MXC_UART_INSTANCES] = {NULL};
@@ -490,6 +499,7 @@ free_handle:
 
 	return ret;
 }
+MAX_UART_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the UART peripheral
@@ -529,6 +539,7 @@ int max_capi_uart_deinit(struct capi_uart_handle *handle)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Read data from the UART device. Blocking function.
@@ -556,6 +567,7 @@ int max_capi_uart_receive(struct capi_uart_handle *handle, uint8_t *buf,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(receive)
 
 /**
  * @brief Write data to the UART device. Blocking function.
@@ -594,6 +606,7 @@ int max_capi_uart_transmit(struct capi_uart_handle *handle, uint8_t *buf,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Read data from the UART device. Nonblocking function.
@@ -643,6 +656,7 @@ int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Write data from the UART device. Nonblocking function.
@@ -692,6 +706,7 @@ int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Register a callback
@@ -714,6 +729,7 @@ int max_capi_uart_register_callback(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Interrupt function for UART
@@ -731,6 +747,7 @@ void max_capi_uart_isr(void *handle)
 
 	MXC_UART_AsyncHandler(uart_priv->uart);
 }
+MAX_UART_DIRECT_ALIAS(isr)
 
 /**
  * @brief Set the line config for UART
@@ -777,6 +794,7 @@ int max_capi_uart_set_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(set_line_config)
 
 /**
  * @brief Get the line config for UART
@@ -799,6 +817,7 @@ int max_capi_uart_get_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(get_line_config)
 
 /**
  * @brief Flush the RX FIFO
@@ -816,6 +835,7 @@ int max_capi_uart_flush_rx_fifo(struct capi_uart_handle *handle)
 
 	return MXC_UART_ClearRXFIFO(uart_priv->uart) == E_NO_ERROR ? 0 : -EIO;
 }
+MAX_UART_DIRECT_ALIAS(flush_rx_fifo)
 
 /**
  * @brief Flush the TX FIFO
@@ -833,6 +853,7 @@ int max_capi_uart_flush_tx_fifo(struct capi_uart_handle *handle)
 
 	return MXC_UART_ClearTXFIFO(uart_priv->uart) == E_NO_ERROR ? 0 : -EIO;
 }
+MAX_UART_DIRECT_ALIAS(flush_tx_fifo)
 
 /**
  * @brief Get the number of bytes available in the RX FIFO
@@ -854,6 +875,7 @@ int max_capi_uart_get_rx_fifo_count(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(get_rx_fifo_count)
 
 /**
  * @brief Get the number of queued bytes in the TX FIFO
@@ -875,6 +897,7 @@ int max_capi_uart_get_tx_fifo_count(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(get_tx_fifo_count)
 
 /**
  * @brief Get the reason for the interrupt
@@ -909,6 +932,7 @@ int max_capi_uart_get_interrupt_reason(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(get_interrupt_reason)
 
 /**
  * @brief Get UART line status flags
@@ -952,6 +976,7 @@ int max_capi_uart_get_line_status(struct capi_uart_handle *handle,
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(get_line_status)
 
 /**
  * @brief Read a single byte from the RX FIFO. Non-blocking.
@@ -977,6 +1002,7 @@ uint32_t max_capi_uart_read_byte(struct capi_uart_handle *handle, uint8_t *byte)
 
 	return 1;
 }
+MAX_UART_DIRECT_ALIAS(read_byte)
 
 /**
  * @brief Write a single byte to the TX FIFO. Non-blocking.
@@ -998,6 +1024,7 @@ uint32_t max_capi_uart_write_byte(struct capi_uart_handle *handle, uint8_t byte)
 
 	return 1;
 }
+MAX_UART_DIRECT_ALIAS(write_byte)
 
 /**
  * @brief Enable or disable the TX interrupt (buffer-empty)
@@ -1022,6 +1049,7 @@ int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(set_irq_tx)
 
 /**
  * @brief Check whether the TX FIFO can accept another byte.
@@ -1042,6 +1070,7 @@ int max_capi_uart_irq_tx_ready(struct capi_uart_handle *handle, bool *ready)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(irq_tx_ready)
 
 /**
  * @brief Check whether transmission is fully complete (FIFO empty, not busy).
@@ -1065,6 +1094,7 @@ int max_capi_uart_irq_tx_complete(struct capi_uart_handle *handle, bool *complet
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(irq_tx_complete)
 
 /**
  * @brief Enable or disable the RX interrupt (data-available)
@@ -1094,6 +1124,7 @@ int max_capi_uart_set_irq_rx(struct capi_uart_handle *handle, bool enable)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(set_irq_rx)
 
 /**
  * @brief Check whether received data is available on the RX FIFO
@@ -1114,6 +1145,7 @@ int max_capi_uart_irq_rx_ready(struct capi_uart_handle *handle, bool *ready)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(irq_rx_ready)
 
 /**
  * @brief Enable or disable the RX line-status (error) interrupt
@@ -1145,6 +1177,7 @@ int max_capi_uart_set_irq_err(struct capi_uart_handle *handle, bool enable)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(set_irq_err)
 
 /**
  * @brief Check whether any enabled UART interrupt is currently pending
@@ -1166,6 +1199,7 @@ int max_capi_uart_is_irq_pending(struct capi_uart_handle *handle, bool *pending)
 
 	return 0;
 }
+MAX_UART_DIRECT_ALIAS(is_irq_pending)
 
 /**
  * @brief Enable/disable FIFO - not supported. UART FIFOs are always on
@@ -1177,6 +1211,7 @@ int max_capi_uart_enable_fifo(struct capi_uart_handle *handle, bool enable)
 {
 	return -ENOSYS;
 }
+MAX_UART_DIRECT_ALIAS(enable_fifo)
 
 /**
  * @brief Transmit 9-bit data - not supported. 9-bit mode is not supported.
@@ -1190,6 +1225,7 @@ int max_capi_uart_transmit_9bit(struct capi_uart_handle *handle, uint16_t data,
 {
 	return -ENOSYS;
 }
+MAX_UART_DIRECT_ALIAS(transmit_9bit)
 
 /**
  * @brief Receive 9-bit data - not supported. 9-bit mode is not supported.
@@ -1203,6 +1239,7 @@ int max_capi_uart_receive_9bit(struct capi_uart_handle *handle, uint16_t *data,
 {
 	return -ENOSYS;
 }
+MAX_UART_DIRECT_ALIAS(receive_9bit)
 
 /**
  * @brief Set flow control state - not supported. Flow control is not supported.
@@ -1216,6 +1253,7 @@ int max_capi_uart_set_flow_control_state(struct capi_uart_handle *handle,
 {
 	return -ENOSYS;
 }
+MAX_UART_DIRECT_ALIAS(set_flow_control_state)
 
 /**
  * @brief Get flow control state - not supported. Flow control is not supported.
@@ -1229,6 +1267,7 @@ int max_capi_uart_get_flow_control_state(struct capi_uart_handle *handle,
 {
 	return -ENOSYS;
 }
+MAX_UART_DIRECT_ALIAS(get_flow_control_state)
 
 struct capi_uart_ops max_capi_uart_ops = {
 	.init = max_capi_uart_init,
@@ -1263,6 +1302,7 @@ struct capi_uart_ops max_capi_uart_ops = {
 	.set_flow_control_state = max_capi_uart_set_flow_control_state,
 	.get_flow_control_state = max_capi_uart_get_flow_control_state,
 };
+
 
 /** Platform-specific functions ***********************************************/
 

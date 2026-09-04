@@ -18,6 +18,15 @@
 #include "trng.h"
 #include "max32657.h"
 
+#ifdef CONFIG_CAPI_TRNG_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_TRNG_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_trng, max_capi_trng, name)
+#else
+#define MAX_TRNG_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_trng_handle *trng = NULL;
@@ -151,6 +160,7 @@ free_handle:
 
 	return ret;
 }
+MAX_TRNG_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the TRNG peripheral
@@ -186,6 +196,7 @@ int max_capi_trng_deinit(struct capi_trng_handle *handle)
 
 	return ret;
 }
+MAX_TRNG_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Generate an unsigned 32-bit number (blocking)
@@ -202,6 +213,7 @@ int max_capi_trng_generate_u32(struct capi_trng_handle *handle, uint32_t *value)
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(generate_u32)
 
 /**
  * @brief Fill a buffer with random bytes (blocking)
@@ -227,6 +239,7 @@ int max_capi_trng_fill_buffer(struct capi_trng_handle *handle, uint8_t *buffer,
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(fill_buffer)
 
 /**
  * @brief Fill a buffer with random bytes (non-blocking)
@@ -259,6 +272,7 @@ int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(fill_buffer_async)
 
 /**
  * @brief Abort the async fill operation
@@ -294,6 +308,7 @@ int max_capi_trng_abort_async(struct capi_trng_handle *handle)
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(abort_async)
 
 /**
  * @brief Check whether the TRNG is busy or not
@@ -313,6 +328,7 @@ int max_capi_trng_is_busy(struct capi_trng_handle *handle, bool *is_busy)
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(is_busy)
 
 /**
  * @brief Register a callback
@@ -337,6 +353,7 @@ int max_capi_trng_register_callback(struct capi_trng_handle *handle,
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Perform entropy source health test
@@ -356,6 +373,7 @@ int max_capi_trng_health_test(struct capi_trng_handle *handle)
 
 	return 0;
 }
+MAX_TRNG_DIRECT_ALIAS(health_test)
 
 /**
  * @brief Interrupt handler for the TRNG peripheral
@@ -370,6 +388,7 @@ void max_capi_trng_isr(void *handle)
 
 	MXC_TRNG_Handler();
 }
+MAX_TRNG_DIRECT_ALIAS(isr)
 
 const struct capi_trng_ops max_capi_trng_ops = {
 	.init = max_capi_trng_init,
@@ -383,4 +402,5 @@ const struct capi_trng_ops max_capi_trng_ops = {
 	.health_test = max_capi_trng_health_test,
 	.isr = max_capi_trng_isr,
 };
+
 

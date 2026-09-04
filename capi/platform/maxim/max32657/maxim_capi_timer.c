@@ -15,6 +15,15 @@
 #include "maxim_capi_timer_priv.h"
 #include "tmr.h"
 
+#ifdef CONFIG_CAPI_TIMER_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_TIMER_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_timer, max_capi_timer, name)
+#else
+#define MAX_TIMER_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_timer_handle *timer[MXC_CFG_TMR_INSTANCES] = {NULL};
@@ -295,6 +304,7 @@ free_handle:
 
 	return ret;
 }
+MAX_TIMER_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the timer peripheral
@@ -339,6 +349,7 @@ int max_capi_timer_deinit(struct capi_timer_handle *handle)
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Timer start function
@@ -358,6 +369,7 @@ int max_capi_timer_start(struct capi_timer_handle *handle)
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(start)
 
 /**
  * @brief Timer stop function
@@ -377,6 +389,7 @@ int max_capi_timer_stop(struct capi_timer_handle *handle)
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(stop)
 
 /**
  * @brief Configure the counter for a timer
@@ -434,6 +447,7 @@ int max_capi_timer_counter_config(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(counter_config)
 
 /**
  * @brief Get the value of a timer counter
@@ -455,6 +469,7 @@ int max_capi_timer_counter_get(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(counter_get)
 
 /**
  * @brief Initialize a channel - allocates memory and sets defaults
@@ -516,6 +531,7 @@ free_channel:
 
 	return ret;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_init)
 
 /**
  * @brief Deinitialize a channel - frees allocated memory
@@ -562,6 +578,7 @@ int max_capi_timer_channel_deinit(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_deinit)
 
 /**
  * @brief Configure a channel - stores configuration in memory without applying
@@ -724,6 +741,7 @@ int max_capi_timer_channel_config(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_config)
 
 /**
  * @brief Enable a channel - applies stored configuration
@@ -849,6 +867,7 @@ int max_capi_timer_channel_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_enable)
 
 /**
  * @brief Disable a channel - stops the specific timer
@@ -888,6 +907,7 @@ int max_capi_timer_channel_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_disable)
 
 /**
  * @brief Set the compare value for a channel
@@ -941,6 +961,7 @@ int max_capi_timer_channel_compare_set(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_compare_set)
 
 /**
  * @brief Get the compare value for a channel
@@ -974,6 +995,7 @@ int max_capi_timer_channel_compare_get(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_compare_get)
 
 /**
  * @brief Get the capture value for a channel.
@@ -989,6 +1011,7 @@ int max_capi_timer_channel_capture_get(struct capi_timer_handle *handle,
 {
 	return -ENOTSUP;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_capture_get)
 
 /**
  * @brief Convert nsec to ticks
@@ -1025,6 +1048,7 @@ int max_capi_timer_nsec_to_ticks(const struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(nsec_to_ticks)
 
 /**
  * @brief Convert ticks to nsec
@@ -1061,6 +1085,7 @@ int max_capi_timer_ticks_to_nsec(const struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(ticks_to_nsec)
 
 /**
  * @brief Enable an event
@@ -1101,6 +1126,7 @@ int max_capi_timer_event_irq_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(event_irq_enable)
 
 /**
  * @brief Disable an event
@@ -1148,6 +1174,7 @@ int max_capi_timer_event_irq_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(event_irq_disable)
 
 /**
  * @brief Register a callback for global events
@@ -1172,6 +1199,7 @@ int max_capi_timer_register_event_callback(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(register_event_callback)
 
 /**
  * @brief Enable interrupts for a specific channel
@@ -1227,6 +1255,7 @@ int max_capi_timer_channel_irq_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_irq_enable)
 
 /**
  * @brief Disable interrupts for a specific channel
@@ -1281,6 +1310,7 @@ int max_capi_timer_channel_irq_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_irq_disable)
 
 /**
  * @brief Register a callback for a specific channel
@@ -1318,6 +1348,7 @@ int max_capi_timer_channel_register_callback(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(channel_register_callback)
 
 /**
  * @brief Check if an IRQ is pending
@@ -1342,6 +1373,7 @@ int max_capi_timer_is_irq_pending(struct capi_timer_handle *handle,
 
 	return 0;
 }
+MAX_TIMER_DIRECT_ALIAS(is_irq_pending)
 
 /**
  * @brief The ISR for the timer peripheral
@@ -1401,6 +1433,7 @@ void max_capi_timer_isr(void *handle)
 
 	MXC_TMR_ClearFlags(MXC_TMR_GET_TMR(timer_priv->identifier));
 }
+MAX_TIMER_DIRECT_ALIAS(isr)
 
 struct capi_timer_ops max_capi_timer_ops = {
 	.init = max_capi_timer_init,
@@ -1428,3 +1461,4 @@ struct capi_timer_ops max_capi_timer_ops = {
 	.nsec_to_ticks = max_capi_timer_nsec_to_ticks,
 	.ticks_to_nsec = max_capi_timer_ticks_to_nsec,
 };
+

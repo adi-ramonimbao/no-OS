@@ -17,6 +17,15 @@
 #include "maxim_capi_rtc_priv.h"
 #include "rtc.h"
 
+#ifdef CONFIG_CAPI_RTC_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_RTC_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_rtc, max_capi_rtc, name)
+#else
+#define MAX_RTC_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_rtc_handle *rtc = NULL;
@@ -137,6 +146,7 @@ free_handle:
 
 	return ret;
 }
+MAX_RTC_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the RTC peripheral
@@ -174,6 +184,7 @@ int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
 
 	return ret;
 }
+MAX_RTC_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Start the RTC
@@ -198,6 +209,7 @@ int max_capi_rtc_start(struct capi_rtc_handle *handle)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(start)
 
 /**
  * @brief Stop the RTC
@@ -222,6 +234,7 @@ int max_capi_rtc_stop(struct capi_rtc_handle *handle)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(stop)
 
 /**
  * @brief Get the current time
@@ -248,6 +261,7 @@ int max_capi_rtc_get_time(struct capi_rtc_handle *handle,
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(get_time)
 
 /**
  * @brief Set the current time
@@ -285,6 +299,7 @@ int max_capi_rtc_set_time(struct capi_rtc_handle *handle,
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(set_time)
 
 /**
  * @brief Get the current datetime - not supported since the MAX32657 does not
@@ -298,6 +313,7 @@ int max_capi_rtc_get_datetime(struct capi_rtc_handle *handle,
 {
 	return -ENOSYS;
 }
+MAX_RTC_DIRECT_ALIAS(get_datetime)
 
 /**
  * @brief Set the current datetime - not supported since the MAX32657 does not
@@ -311,6 +327,7 @@ int max_capi_rtc_set_datetime(struct capi_rtc_handle *handle,
 {
 	return -ENOSYS;
 }
+MAX_RTC_DIRECT_ALIAS(set_datetime)
 
 /**
  * @brief Set an alarm
@@ -359,6 +376,7 @@ int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
 		return -EINVAL;
 	}
 }
+MAX_RTC_DIRECT_ALIAS(set_alarm)
 
 /**
  * @brief Disable an alarm
@@ -392,6 +410,7 @@ int max_capi_rtc_disable_alarm(struct capi_rtc_handle *handle,
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(disable_alarm)
 
 /**
  * @brief Enable square wave output
@@ -431,6 +450,7 @@ int max_capi_rtc_sqwave_enable(struct capi_rtc_handle *handle,
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(sqwave_enable)
 
 /**
  * @brief Disable square wave output
@@ -450,6 +470,7 @@ int max_capi_rtc_sqwave_disable(struct capi_rtc_handle *handle)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(sqwave_disable)
 
 /**
  * @brief Trim/calibrate the RTC frequency
@@ -479,6 +500,7 @@ int max_capi_rtc_trim(struct capi_rtc_handle *handle, int8_t trim)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(trim)
 
 /**
  * @brief Register event callback
@@ -502,6 +524,7 @@ int max_capi_rtc_register_callback(struct capi_rtc_handle *handle,
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Enable an RTC event
@@ -540,6 +563,7 @@ int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(enable_event)
 
 /**
  * @brief Disable an RTC event
@@ -575,6 +599,7 @@ int max_capi_rtc_disable_event(struct capi_rtc_handle *handle, uint32_t event)
 
 	return 0;
 }
+MAX_RTC_DIRECT_ALIAS(disable_event)
 
 /**
  * @brief RTC interrupt handler
@@ -618,6 +643,7 @@ void max_capi_rtc_isr(void *handle)
 			rtc_priv->callback(rtc_handle, CAPI_RTC_EVENT_READY, rtc_priv->event_ctx);
 	}
 }
+MAX_RTC_DIRECT_ALIAS(isr)
 
 const struct capi_rtc_ops max_capi_rtc_ops = {
 	.init = max_capi_rtc_init,
@@ -638,3 +664,4 @@ const struct capi_rtc_ops max_capi_rtc_ops = {
 	.disable_event = max_capi_rtc_disable_event,
 	.isr = max_capi_rtc_isr,
 };
+

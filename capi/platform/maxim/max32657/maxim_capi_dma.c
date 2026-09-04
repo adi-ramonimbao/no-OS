@@ -18,6 +18,15 @@
 #include "maxim_capi_irq.h"
 #include "capi_irq.h"
 
+#ifdef CONFIG_CAPI_DMA_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_DMA_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_dma, max_capi_dma, name)
+#else
+#define MAX_DMA_DIRECT_ALIAS(name)
+#endif
+
 static struct capi_dma_handle *dma;
 
 /** Forward declaration *******************************************************/
@@ -142,6 +151,7 @@ free_handle:
 
 	return ret;
 }
+MAX_DMA_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the DMA
@@ -181,6 +191,7 @@ int max_capi_dma_deinit(struct capi_dma_handle *handle)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Initialize a DMA channel
@@ -263,6 +274,7 @@ free_channel:
 		capi_free(chan);
 	return ret;
 }
+MAX_DMA_DIRECT_ALIAS(init_chan)
 
 /**
  * @brief Deinitialize a DMA channel
@@ -297,6 +309,7 @@ int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(deinit_chan)
 
 /**
  * @brief Configure a DMA channel transfer
@@ -386,6 +399,7 @@ int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(config_xfer)
 
 /**
  * @brief Start a DMA transfer on a channel
@@ -415,6 +429,7 @@ int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(xfer_start)
 
 /**
  * @brief Stop a DMA transfer on a channel
@@ -437,6 +452,7 @@ int max_capi_dma_xfer_abort(struct capi_dma_chan *chan)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(xfer_abort)
 
 /**
  * @brief Check if a DMA channel has completed its transfer
@@ -463,6 +479,7 @@ bool max_capi_dma_chan_is_completed(const struct capi_dma_chan *chan)
 
 	return ch_priv->completed;
 }
+MAX_DMA_DIRECT_ALIAS(chan_is_completed)
 
 /**
  * @brief DMA controller interrupt handler
@@ -479,6 +496,7 @@ int max_capi_dma_isr(struct capi_dma_handle *handle)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(isr)
 
 /**
  * @brief DMA channel interrupt handler
@@ -516,6 +534,7 @@ int max_capi_dma_isr_chan(struct capi_dma_chan *chan)
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(isr_chan)
 
 /**
  * @brief Register callback function for DMA channel interrupts
@@ -536,6 +555,7 @@ int max_capi_dma_register_complete_callback(struct capi_dma_chan *chan,
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(register_complete_callback)
 
 /**
  * @brief Register callback function for DMA error events
@@ -556,6 +576,7 @@ int max_capi_dma_register_error_callback(struct capi_dma_chan *chan,
 
 	return 0;
 }
+MAX_DMA_DIRECT_ALIAS(register_error_callback)
 
 const struct capi_dma_ops max_capi_dma_ops = {
 	.init = max_capi_dma_init,
@@ -571,6 +592,7 @@ const struct capi_dma_ops max_capi_dma_ops = {
 	.register_complete_callback = max_capi_dma_register_complete_callback,
 	.register_error_callback = max_capi_dma_register_error_callback,
 };
+
 
 /**
  * @brief IRQ callback wrapper that bridges CAPI IRQ to CAPI DMA

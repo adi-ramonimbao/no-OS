@@ -16,6 +16,15 @@
 #include "max32657.h"
 #include "capi_alloc.h"
 
+#ifdef CONFIG_CAPI_GPIO_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define MAX_GPIO_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, max_capi_gpio, name)
+#else
+#define MAX_GPIO_DIRECT_ALIAS(name)
+#endif
+
 /** Static variables **********************************************************/
 
 static struct capi_gpio_port_handle *gpio[MXC_CFG_GPIO_INSTANCES] = {NULL};
@@ -121,6 +130,7 @@ free_handle:
 
 	return ret;
 }
+MAX_GPIO_DIRECT_ALIAS(port_init)
 
 /**
  * @brief Deinitialize a GPIO port
@@ -148,6 +158,7 @@ int max_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_deinit)
 
 /**
  * @brief Set direction for all pins in the port
@@ -190,6 +201,7 @@ int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
 	priv->direction_mask = (uint32_t)direction_bitmask & priv->pin_mask;
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_set_direction)
 
 /**
  * @brief Get direction for all pins in the port
@@ -211,6 +223,7 @@ int max_capi_gpio_port_get_direction(struct capi_gpio_port_handle *handle,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_get_direction)
 
 /**
  * @brief Set raw value for all pins in the port (ignoring ACTIVE_LOW flag)
@@ -238,6 +251,7 @@ int max_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle *handle,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_set_raw_value)
 
 /**
  * @brief Get raw value for all pins in the port (ignoring ACTIVE_LOW flag)
@@ -262,6 +276,7 @@ int max_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle *handle,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_get_raw_value)
 
 /**
  * @brief Set value for all pins in the port
@@ -274,6 +289,7 @@ int max_capi_gpio_port_set_value(struct capi_gpio_port_handle *handle,
 {
 	return max_capi_gpio_port_set_raw_value(handle, value_bitmask);
 }
+MAX_GPIO_DIRECT_ALIAS(port_set_value)
 
 /**
  * @brief Get value for all pins in the port
@@ -286,6 +302,7 @@ int max_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
 {
 	return max_capi_gpio_port_get_raw_value(handle, value_bitmask);
 }
+MAX_GPIO_DIRECT_ALIAS(port_get_value)
 
 /**
  * @brief Set direction for a single pin
@@ -332,6 +349,7 @@ int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_set_direction)
 
 /**
  * @brief Get direction for a single pin
@@ -359,6 +377,7 @@ int max_capi_gpio_pin_get_direction(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_get_direction)
 
 /**
  * @brief Set the raw value of a single pin (ignoring the ACITVE_LOW flag)
@@ -396,6 +415,7 @@ int max_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin, uint8_t value)
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_set_raw_value)
 
 /**
  * @brief Get the raw value of a single pin (ignoring the ACTIVE_LOW flag)
@@ -425,6 +445,7 @@ int max_capi_gpio_pin_get_raw_value(struct capi_gpio_pin *pin, uint8_t *value)
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_get_raw_value)
 
 /**
  * @brief Apply logical value considering ACTIVE_LOW flag
@@ -469,6 +490,7 @@ int max_capi_gpio_pin_set_value(struct capi_gpio_pin *pin, uint8_t value)
 
 	return max_capi_gpio_pin_set_raw_value(pin, raw_value);
 }
+MAX_GPIO_DIRECT_ALIAS(pin_set_value)
 
 /**
  * @brief Get the value of a single pin (considering the ACTIVE_LOW flag)
@@ -492,6 +514,7 @@ int max_capi_gpio_pin_get_value(struct capi_gpio_pin *pin, uint8_t *value)
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_get_value)
 
 /**
  * @brief Toggle the value of the specified pins in a port
@@ -516,6 +539,7 @@ int max_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(port_toggle)
 
 /**
  * @brief Toggle the output value of the specified GPIO pin
@@ -539,6 +563,7 @@ int max_capi_gpio_pin_toggle(struct capi_gpio_pin *pin)
 
 	return 0;
 }
+MAX_GPIO_DIRECT_ALIAS(pin_toggle)
 
 const struct capi_gpio_ops max_capi_gpio_ops = {
 	.port_init = &max_capi_gpio_port_init,
@@ -558,3 +583,4 @@ const struct capi_gpio_ops max_capi_gpio_ops = {
 	.port_toggle = &max_capi_gpio_port_toggle,
 	.pin_toggle = &max_capi_gpio_pin_toggle,
 };
+
