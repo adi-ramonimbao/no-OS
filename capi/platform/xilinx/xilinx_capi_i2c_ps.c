@@ -25,6 +25,15 @@
 #include <string.h>
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_I2C_DIRECT_API) && defined(CONFIG_CAPI_I2C_XILINX_DIRECT_PS)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_I2C_PS_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, capi_i2c_ps, name)
+#else
+#define XILINX_I2C_PS_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XIICPS_NUM_INSTANCES
 
 #define I2C_PS_DEFAULT_SCLK_HZ		100000U
@@ -382,6 +391,7 @@ static int capi_i2c_ps_init(struct capi_i2c_controller_handle **handle,
 
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -452,6 +462,7 @@ static int capi_i2c_ps_deinit(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Run a synchronous transmit operation.
@@ -573,6 +584,7 @@ done:
 	xh->xfer_status = ret;
 	return ret;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Run a synchronous receive operation.
@@ -672,6 +684,7 @@ done:
 	xh->xfer_status = ret;
 	return ret;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -690,6 +703,7 @@ static int capi_i2c_ps_register_callback(struct capi_i2c_controller_handle
 	xh->callback_arg = callback_arg;
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Configure the I2C bus speed.
@@ -758,6 +772,7 @@ static int capi_i2c_ps_configure_bus_speed(struct capi_i2c_controller_handle
 	xh->clk_freq_hz = speed_hz;
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(configure_bus_speed)
 
 /**
  * @brief Start an asynchronous transmit operation.
@@ -932,6 +947,7 @@ static int capi_i2c_ps_transmit_async(struct capi_i2c_device *device,
 	}
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Start an asynchronous receive operation.
@@ -1077,6 +1093,7 @@ static int capi_i2c_ps_receive_async(struct capi_i2c_device *device,
 	XIicPs_MasterRecv(inst(xh), transfer->buf, transfer->len, addr);
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Recover the I2C controller state.
@@ -1131,6 +1148,7 @@ static int capi_i2c_ps_recover_bus(struct capi_i2c_controller_handle *handle)
 
 	return ret;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(recover_bus)
 
 /**
  * @brief Register an I2C target address.
@@ -1172,6 +1190,7 @@ static int capi_i2c_ps_register_target(struct capi_i2c_controller_handle
 	xh->target_addr = addr;
 	return 0;
 }
+XILINX_I2C_PS_DIRECT_ALIAS(register_target)
 
 /**
  * @brief Unregister the I2C target address.
@@ -1198,6 +1217,7 @@ static int capi_i2c_ps_unregister_target(struct capi_i2c_controller_handle
 	xh->target_addr = 0;
 	return xiicps_reset_restore(xh);
 }
+XILINX_I2C_PS_DIRECT_ALIAS(unregister_target)
 
 /**
  * @brief Top up the slave transmit FIFO ahead of the BSP handler.
@@ -1283,6 +1303,7 @@ static void capi_i2c_ps_isr(void *handle)
 		XIicPs_SlaveInterruptHandler(inst(xh));
 	}
 }
+XILINX_I2C_PS_DIRECT_ALIAS(isr)
 
 static void xiicps_async_complete(struct capi_i2c_xilinx_handle *xh, int status,
 				  enum capi_i2c_async_event ev)

@@ -157,4 +157,9 @@ config CAPI_TRNG_DIRECT_API
 	  aliases instead of the ops-pointer dispatcher, and drop
 	  capi/src/capi_trng.c. Safe because no-OS builds one platform per image.
 
+# Platform-specific direct-API selectors (e.g. Xilinx PS/PL variant choice).
+# Sourced unconditionally: the symbols only gate the matching platform's driver
+# sources, which are compiled solely when that PLATFORM is active.
+source "capi/platform/xilinx/Kconfig"
+
 endif # CAPI

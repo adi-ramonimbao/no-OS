@@ -27,6 +27,15 @@
 #include <xilinx_capi_timer_priv.h>
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_TIMER_DIRECT_API) && defined(CONFIG_CAPI_TIMER_XILINX_DIRECT_PS_SCU)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_TIMER_PS_SCU_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_timer, capi_timer_ps_scu, name)
+#else
+#define XILINX_TIMER_PS_SCU_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XSCUTIMER_NUM_INSTANCES
 
 #define CAPI_TIMER_NSEC_PER_SEC	1000000000ULL
@@ -303,6 +312,7 @@ static int capi_timer_ps_scu_init(struct capi_timer_handle **handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI timer backend instance.
@@ -341,6 +351,7 @@ static int capi_timer_ps_scu_deinit(struct capi_timer_handle *handle)
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Start the timer counter.
@@ -358,6 +369,7 @@ static int capi_timer_ps_scu_start(struct capi_timer_handle *handle)
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(start)
 
 /**
  * @brief Stop the timer counter.
@@ -375,6 +387,7 @@ static int capi_timer_ps_scu_stop(struct capi_timer_handle *handle)
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(stop)
 
 /**
  * @brief Configure the timer counter.
@@ -409,6 +422,7 @@ static int capi_timer_ps_scu_counter_config(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(counter_config)
 
 /**
  * @brief Read the timer counter value.
@@ -428,6 +442,7 @@ static int capi_timer_ps_scu_counter_get(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(counter_get)
 
 /**
  * @brief Enable timer global event interrupts.
@@ -462,6 +477,7 @@ static int capi_timer_ps_scu_event_irq_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(event_irq_enable)
 
 /**
  * @brief Disable timer global event interrupts.
@@ -486,6 +502,7 @@ static int capi_timer_ps_scu_event_irq_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(event_irq_disable)
 
 /**
  * @brief Register the timer global event callback.
@@ -508,6 +525,7 @@ static int capi_timer_ps_scu_register_event_callback(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(register_event_callback)
 
 /**
  * @brief Initialize the CAPI timer backend instance.
@@ -532,6 +550,7 @@ static int capi_timer_ps_scu_channel_init(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_init)
 
 /**
  * @brief Deinitialize the CAPI timer backend instance.
@@ -560,6 +579,7 @@ static int capi_timer_ps_scu_channel_deinit(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_deinit)
 
 /**
  * @brief Configure a timer channel.
@@ -594,6 +614,7 @@ static int capi_timer_ps_scu_channel_config(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_config)
 
 /**
  * @brief Enable a timer channel.
@@ -617,6 +638,7 @@ static int capi_timer_ps_scu_channel_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_enable)
 
 /**
  * @brief Disable a timer channel.
@@ -640,6 +662,7 @@ static int capi_timer_ps_scu_channel_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_disable)
 
 /**
  * @brief Set a timer channel compare value.
@@ -665,6 +688,7 @@ static int capi_timer_ps_scu_channel_compare_set(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_compare_set)
 
 /**
  * @brief Get a timer channel compare value.
@@ -690,6 +714,7 @@ static int capi_timer_ps_scu_channel_compare_get(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_compare_get)
 
 /**
  * @brief Get a timer channel capture value.
@@ -706,6 +731,7 @@ static int capi_timer_ps_scu_channel_capture_get(struct capi_timer_handle
 	(void)capture;
 	return -ENOTSUP;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_capture_get)
 
 /**
  * @brief Enable timer channel interrupts.
@@ -744,6 +770,7 @@ static int capi_timer_ps_scu_channel_irq_enable(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_irq_enable)
 
 /**
  * @brief Disable timer channel interrupts.
@@ -772,6 +799,7 @@ static int capi_timer_ps_scu_channel_irq_disable(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_irq_disable)
 
 /**
  * @brief Register a timer channel callback.
@@ -798,6 +826,7 @@ static int capi_timer_ps_scu_channel_register_callback(struct capi_timer_handle
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(channel_register_callback)
 
 /**
  * @brief Check whether a timer interrupt is pending.
@@ -817,6 +846,7 @@ static int capi_timer_ps_scu_is_irq_pending(struct capi_timer_handle *handle,
 
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(is_irq_pending)
 
 /**
  * @brief Dispatch the timer interrupt handler.
@@ -843,6 +873,7 @@ static void capi_timer_ps_scu_isr(struct capi_timer_handle *handle)
 				   0);
 	}
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(isr)
 
 /**
  * @brief Convert nanoseconds to timer ticks.
@@ -882,6 +913,7 @@ static int capi_timer_ps_scu_nsec_to_ticks(const struct capi_timer_handle
 	*ticks = (uint32_t)result;
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(nsec_to_ticks)
 
 /**
  * @brief Convert timer ticks to nanoseconds.
@@ -921,5 +953,6 @@ static int capi_timer_ps_scu_ticks_to_nsec(const struct capi_timer_handle
 	*duration_ns = (uint32_t)result;
 	return 0;
 }
+XILINX_TIMER_PS_SCU_DIRECT_ALIAS(ticks_to_nsec)
 
 #endif /* XPAR_XSCUTIMER_NUM_INSTANCES */

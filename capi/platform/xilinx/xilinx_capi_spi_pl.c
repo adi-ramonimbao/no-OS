@@ -23,6 +23,15 @@
 #include "capi_irq.h"
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_SPI_DIRECT_API) && defined(CONFIG_CAPI_SPI_XILINX_DIRECT_PL)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_SPI_PL_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_spi, capi_spi_pl, name)
+#else
+#define XILINX_SPI_PL_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XSPI_NUM_INSTANCES
 
 /* native_cs == 0 selects CS0. */
@@ -441,6 +450,7 @@ err_handle:
 		xilinx_spi_clear_app_handle(h);
 	return ret;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -482,6 +492,7 @@ static int capi_spi_pl_deinit(struct capi_spi_controller_handle *handle)
 
 	return 0;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Run a synchronous SPI transceive operation.
@@ -612,6 +623,7 @@ static int capi_spi_pl_transceive(struct capi_spi_device *device,
 	return (gpio_error != 0) ? gpio_error :
 	       xspi_status_to_errno(status);
 }
+XILINX_SPI_PL_DIRECT_ALIAS(transceive)
 
 /**
  * @brief Start an asynchronous SPI transceive operation.
@@ -729,6 +741,7 @@ static int capi_spi_pl_transceive_async(struct capi_spi_device *device,
 
 	return 0;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(transceive_async)
 
 /**
  * @brief Run a synchronous SPI command-read operation.
@@ -826,6 +839,7 @@ static int capi_spi_pl_read_command(struct capi_spi_device *device,
 	return (gpio_error != 0) ? gpio_error :
 	       xspi_status_to_errno(status);
 }
+XILINX_SPI_PL_DIRECT_ALIAS(read_command)
 
 /**
  * @brief Start an asynchronous SPI command-read operation.
@@ -946,6 +960,7 @@ static int capi_spi_pl_read_command_async(struct capi_spi_device *device,
 
 	return 0;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(read_command_async)
 
 /**
  * @brief Abort an in-progress asynchronous operation.
@@ -974,6 +989,7 @@ static int capi_spi_pl_abort_async(struct capi_spi_device *device)
 
 	return ret;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(abort_async)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -992,6 +1008,7 @@ static int capi_spi_pl_register_callback(struct capi_spi_controller_handle
 	xh->callback_arg = callback_arg;
 	return 0;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Control the SPI chip select line.
@@ -1040,6 +1057,7 @@ static int capi_spi_pl_set_cs(struct capi_spi_device *device,
 		return pl_drive_native_cs(xh, device->native_cs, false);
 	return -EINVAL;
 }
+XILINX_SPI_PL_DIRECT_ALIAS(set_cs)
 
 /**
  * @brief Dispatch the backend interrupt handler.
@@ -1055,5 +1073,6 @@ static void capi_spi_pl_isr(void *handle)
 	XSpi_InterruptHandler(inst(xh));
 	spi_finish_irq(xh);
 }
+XILINX_SPI_PL_DIRECT_ALIAS(isr)
 
 #endif /* XPAR_XSPI_NUM_INSTANCES */

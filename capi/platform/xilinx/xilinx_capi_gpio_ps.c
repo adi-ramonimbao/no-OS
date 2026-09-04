@@ -21,6 +21,15 @@
 #include <errno.h>
 #include <stdint.h>
 
+
+#if defined(CONFIG_CAPI_GPIO_DIRECT_API) && defined(CONFIG_CAPI_GPIO_XILINX_DIRECT_PS)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_GPIO_PS_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, capi_gpio_xilinx, name)
+#else
+#define XILINX_GPIO_PS_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XGPIOPS_NUM_INSTANCES
 
 static int capi_gpio_xilinx_port_init(struct capi_gpio_port_handle **handle,
@@ -274,6 +283,7 @@ err_handle:
 		xilinx_gpio_clear_app_handle(h);
 	return ret;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_init)
 
 /**
  * @brief Deinitialize a PS GPIO port.
@@ -309,6 +319,7 @@ static int capi_gpio_xilinx_port_deinit(struct capi_gpio_port_handle **handle)
 	}
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_deinit)
 
 /**
  * @brief Set PS GPIO port direction.
@@ -347,6 +358,7 @@ static int capi_gpio_xilinx_port_set_direction(struct capi_gpio_port_handle
 	}
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_set_direction)
 
 /**
  * @brief Get PS GPIO port direction (cached).
@@ -369,6 +381,7 @@ static int capi_gpio_xilinx_port_get_direction(struct capi_gpio_port_handle
 	*direction_bitmask = xhandle->direction;
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_get_direction)
 
 /**
  * @brief Set PS GPIO port raw output value (no ACTIVE_LOW inversion).
@@ -400,6 +413,7 @@ static int capi_gpio_xilinx_port_set_raw_value(struct capi_gpio_port_handle
 	}
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_set_raw_value)
 
 /**
  * @brief Set PS GPIO port output value (applies ACTIVE_LOW inversion).
@@ -421,6 +435,7 @@ static int capi_gpio_xilinx_port_set_value(struct capi_gpio_port_handle *handle,
 	return capi_gpio_xilinx_port_set_raw_value(
 		       handle, logical_to_raw(value_bitmask, xhandle->active_low_mask));
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_set_value)
 
 /**
  * @brief Get PS GPIO port raw value (no ACTIVE_LOW inversion).
@@ -450,6 +465,7 @@ static int capi_gpio_xilinx_port_get_raw_value(struct capi_gpio_port_handle
 	}
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_get_raw_value)
 
 /**
  * @brief Get PS GPIO port value (applies ACTIVE_LOW inversion).
@@ -476,6 +492,7 @@ static int capi_gpio_xilinx_port_get_value(struct capi_gpio_port_handle *handle,
 	*value_bitmask = raw_to_logical(raw, xhandle->active_low_mask);
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_get_value)
 
 /**
  * @brief Set PS GPIO pin direction.
@@ -509,6 +526,7 @@ static int capi_gpio_xilinx_pin_set_direction(struct capi_gpio_pin *pin,
 	XGpioPs_SetOutputEnablePin(inst, physical_pin, is_input ? 0 : 1);
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_set_direction)
 
 /**
  * @brief Get PS GPIO pin direction (cached).
@@ -535,6 +553,7 @@ static int capi_gpio_xilinx_pin_get_direction(struct capi_gpio_pin *pin,
 		CAPI_GPIO_OUTPUT;
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_get_direction)
 
 /**
  * @brief Set PS GPIO pin value (applies ACTIVE_LOW inversion).
@@ -561,6 +580,7 @@ static int capi_gpio_xilinx_pin_set_value(struct capi_gpio_pin *pin,
 			 raw);
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_set_value)
 
 /**
  * @brief Get PS GPIO pin value (applies ACTIVE_LOW inversion).
@@ -590,6 +610,7 @@ static int capi_gpio_xilinx_pin_get_value(struct capi_gpio_pin *pin,
 	*value = (gpio_pin_flags(xhandle, pin) & CAPI_GPIO_ACTIVE_LOW) ? !raw : raw;
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_get_value)
 
 /**
  * @brief Set PS GPIO pin raw output value (no ACTIVE_LOW inversion).
@@ -614,6 +635,7 @@ static int capi_gpio_xilinx_pin_set_raw_value(struct capi_gpio_pin *pin,
 			 value & 1);
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_set_raw_value)
 
 /**
  * @brief Get PS GPIO pin raw value (no ACTIVE_LOW inversion).
@@ -641,6 +663,7 @@ static int capi_gpio_xilinx_pin_get_raw_value(struct capi_gpio_pin *pin,
 				 xhandle->base_pin + pin->number) & 1;
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_get_raw_value)
 
 /**
  * @brief Toggle specified GPIO pins in a port.
@@ -673,6 +696,7 @@ static int capi_gpio_xilinx_port_toggle(struct capi_gpio_port_handle *handle,
 	}
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(port_toggle)
 
 /**
  * @brief Toggle a specified GPIO pin.
@@ -702,5 +726,6 @@ static int capi_gpio_xilinx_pin_toggle(struct capi_gpio_pin *pin)
 			 xhandle->base_pin + pin->number, current ^ 1);
 	return 0;
 }
+XILINX_GPIO_PS_DIRECT_ALIAS(pin_toggle)
 
 #endif /* XPAR_XGPIOPS_NUM_INSTANCES */

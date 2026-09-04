@@ -27,6 +27,15 @@
 #include "capi_irq.h"
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_UART_DIRECT_API) && defined(CONFIG_CAPI_UART_XILINX_DIRECT_PL_NS550)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_UART_PL_NS550_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, capi_uart_ns550, name)
+#else
+#define XILINX_UART_PL_NS550_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XUARTNS550_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */
@@ -257,6 +266,7 @@ static int capi_uart_ns550_init(struct capi_uart_handle **handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -301,6 +311,7 @@ static int capi_uart_ns550_deinit(struct capi_uart_handle *handle)
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Get the UART line configuration.
@@ -345,6 +356,7 @@ static int capi_uart_ns550_get_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(get_line_config)
 
 /**
  * @brief Set the UART line configuration.
@@ -445,6 +457,7 @@ static int capi_uart_ns550_set_line_config(struct capi_uart_handle *handle,
 	memcpy(&xh->line_config, line_config, sizeof(*line_config));
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(set_line_config)
 
 /**
  * @brief Enable or disable UART FIFO behavior.
@@ -471,6 +484,7 @@ static int capi_uart_ns550_enable_fifo(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(enable_fifo)
 
 /**
  * @brief Flush the UART TX FIFO.
@@ -489,6 +503,7 @@ static int capi_uart_ns550_flush_tx_fifo(struct capi_uart_handle *handle)
 			    XUN_FIFO_ENABLE | XUN_FIFO_TX_RESET | XUN_FIFO_TRIGGER_08);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(flush_tx_fifo)
 
 /**
  * @brief Flush the UART RX FIFO.
@@ -507,6 +522,7 @@ static int capi_uart_ns550_flush_rx_fifo(struct capi_uart_handle *handle)
 			    XUN_FIFO_ENABLE | XUN_FIFO_RX_RESET | XUN_FIFO_TRIGGER_08);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(flush_rx_fifo)
 
 /**
  * @brief Get the UART RX FIFO occupancy.
@@ -525,6 +541,7 @@ static int capi_uart_ns550_get_rx_fifo_count(struct capi_uart_handle *handle,
 	*count = (lsr & XUN_LSR_DATA_READY) ? 1 : 0;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(get_rx_fifo_count)
 
 /**
  * @brief Get the UART TX FIFO occupancy.
@@ -543,6 +560,7 @@ static int capi_uart_ns550_get_tx_fifo_count(struct capi_uart_handle *handle,
 	*count = (lsr & XUN_LSR_TX_BUFFER_EMPTY) ? 0 : 1;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(get_tx_fifo_count)
 
 /**
  * @brief Run a synchronous transmit operation.
@@ -597,6 +615,7 @@ static int capi_uart_ns550_transmit(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Run a synchronous receive operation.
@@ -621,6 +640,7 @@ static int capi_uart_ns550_receive(struct capi_uart_handle *handle,
 		total += XUartNs550_Recv(inst(xh), buf + total, len - total);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -640,6 +660,7 @@ static int capi_uart_ns550_register_callback(struct capi_uart_handle *handle,
 	xh->callback_arg = callback_arg;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Start an asynchronous transmit operation.
@@ -678,6 +699,7 @@ static int capi_uart_ns550_transmit_async(struct capi_uart_handle *handle,
 	capi_irq_enable(xh->irq_id);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Start an asynchronous receive operation.
@@ -720,6 +742,7 @@ static int capi_uart_ns550_receive_async(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Get the last UART interrupt reason.
@@ -737,6 +760,7 @@ static int capi_uart_ns550_get_interrupt_reason(struct capi_uart_handle *handle,
 	*reason = xh->last_interrupt_reason;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(get_interrupt_reason)
 
 /**
  * @brief Get UART line status flags.
@@ -768,6 +792,7 @@ static int capi_uart_ns550_get_line_status(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(get_line_status)
 
 /**
  * @brief Dispatch the backend interrupt handler.
@@ -782,6 +807,7 @@ static void capi_uart_ns550_isr(void *handle)
 	struct capi_uart_xilinx_handle *xh = ((struct capi_uart_handle *)handle)->priv;
 	XUartNs550_InterruptHandler(inst(xh));
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(isr)
 
 static void ns550_rx_done(struct capi_uart_xilinx_handle *xh,
 			  unsigned int event_data)
@@ -874,6 +900,7 @@ static int capi_uart_ns550_set_irq_tx(struct capi_uart_handle *handle,
 	XUartNs550_WriteReg(inst(xh)->BaseAddress, XUN_IER_OFFSET, ier);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(set_irq_tx)
 
 /**
  * @brief Check if TX buffer is ready for more data.
@@ -892,6 +919,7 @@ static int capi_uart_ns550_irq_tx_ready(struct capi_uart_handle *handle,
 	*ready = (lsr & XUN_LSR_TX_EMPTY) ? true : false;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(irq_tx_ready)
 
 /**
  * @brief Check if transmission is complete.
@@ -910,6 +938,7 @@ static int capi_uart_ns550_irq_tx_complete(struct capi_uart_handle *handle,
 	*complete = (lsr & XUN_LSR_TX_EMPTY) ? true : false;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(irq_tx_complete)
 
 /**
  * @brief Enable or disable RX interrupt.
@@ -932,6 +961,7 @@ static int capi_uart_ns550_set_irq_rx(struct capi_uart_handle *handle,
 	XUartNs550_WriteReg(inst(xh)->BaseAddress, XUN_IER_OFFSET, ier);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(set_irq_rx)
 
 /**
  * @brief Check if RX data is ready.
@@ -950,6 +980,7 @@ static int capi_uart_ns550_irq_rx_ready(struct capi_uart_handle *handle,
 	*ready = (lsr & XUN_LSR_DATA_READY) ? true : false;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(irq_rx_ready)
 
 /**
  * @brief Enable or disable error/status interrupt.
@@ -972,6 +1003,7 @@ static int capi_uart_ns550_set_irq_err(struct capi_uart_handle *handle,
 	XUartNs550_WriteReg(inst(xh)->BaseAddress, XUN_IER_OFFSET, ier);
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(set_irq_err)
 
 /**
  * @brief Check if any UART interrupt is pending.
@@ -990,5 +1022,6 @@ static int capi_uart_ns550_is_irq_pending(struct capi_uart_handle *handle,
 	*pending = (iir & 0x01) ? false : true;
 	return 0;
 }
+XILINX_UART_PL_NS550_DIRECT_ALIAS(is_irq_pending)
 
 #endif /* XPAR_XUARTNS550_NUM_INSTANCES */

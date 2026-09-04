@@ -26,6 +26,15 @@
 #include "capi_irq.h"
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_UART_DIRECT_API) && defined(CONFIG_CAPI_UART_XILINX_DIRECT_PL_LITE)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_UART_PL_LITE_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, capi_uart_pl_lite, name)
+#else
+#define XILINX_UART_PL_LITE_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XUARTLITE_NUM_INSTANCES
 
 
@@ -244,6 +253,7 @@ static int capi_uart_pl_lite_init(struct capi_uart_handle **handle,
 
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -283,6 +293,7 @@ static int capi_uart_pl_lite_deinit(struct capi_uart_handle *handle)
 
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Get the UART line configuration.
@@ -301,6 +312,7 @@ static int capi_uart_pl_lite_get_line_config(struct capi_uart_handle *handle,
 	memcpy(line_config, &xh->line_config, sizeof(*line_config));
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(get_line_config)
 
 /**
  * @brief Set the UART line configuration.
@@ -319,6 +331,7 @@ static int capi_uart_pl_lite_set_line_config(struct capi_uart_handle *handle,
 	(void)line_config;
 	return -ENOTSUP;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(set_line_config)
 
 /**
  * @brief Enable or disable UART FIFO behavior.
@@ -333,6 +346,7 @@ static int capi_uart_pl_lite_enable_fifo(struct capi_uart_handle *handle,
 	(void)enable;
 	return 0; /* XUartLite always uses FIFOs */
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(enable_fifo)
 
 /**
  * @brief Flush the UART TX FIFO.
@@ -349,6 +363,7 @@ static int capi_uart_pl_lite_flush_tx_fifo(struct capi_uart_handle *handle)
 	XUartLite_ResetFifos(inst(xh));
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(flush_tx_fifo)
 
 /**
  * @brief Flush the UART RX FIFO.
@@ -365,6 +380,7 @@ static int capi_uart_pl_lite_flush_rx_fifo(struct capi_uart_handle *handle)
 	XUartLite_ResetFifos(inst(xh));
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(flush_rx_fifo)
 
 /**
  * @brief Get the UART RX FIFO occupancy.
@@ -384,6 +400,7 @@ static int capi_uart_pl_lite_get_rx_fifo_count(struct capi_uart_handle *handle,
 	*count = (sr & XUL_SR_RX_FIFO_VALID_DATA) ? 1 : 0;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(get_rx_fifo_count)
 
 /**
  * @brief Get the UART TX FIFO occupancy.
@@ -403,6 +420,7 @@ static int capi_uart_pl_lite_get_tx_fifo_count(struct capi_uart_handle *handle,
 	*count = (sr & XUL_SR_TX_FIFO_EMPTY) ? 0 : 1;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(get_tx_fifo_count)
 
 /**
  * @brief Run a synchronous transmit operation.
@@ -449,6 +467,7 @@ static int capi_uart_pl_lite_transmit(struct capi_uart_handle *handle,
 	inst(xh)->SendBuffer.RequestedBytes = 0;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Run a synchronous receive operation.
@@ -477,6 +496,7 @@ static int capi_uart_pl_lite_receive(struct capi_uart_handle *handle,
 	inst(xh)->ReceiveBuffer.RequestedBytes = 0;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -496,6 +516,7 @@ static int capi_uart_pl_lite_register_callback(struct capi_uart_handle *handle,
 	xh->callback_arg = callback_arg;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Start an asynchronous transmit operation.
@@ -541,6 +562,7 @@ static int capi_uart_pl_lite_transmit_async(struct capi_uart_handle *handle,
 		XUartLite_EnableInterrupt(inst(xh));
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Start an asynchronous receive operation.
@@ -581,6 +603,7 @@ static int capi_uart_pl_lite_receive_async(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Get the last UART interrupt reason.
@@ -599,6 +622,7 @@ static int capi_uart_pl_lite_get_interrupt_reason(struct capi_uart_handle
 	*reason = xh->last_interrupt_reason;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(get_interrupt_reason)
 
 /**
  * @brief Get UART line status flags.
@@ -626,6 +650,7 @@ static int capi_uart_pl_lite_get_line_status(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(get_line_status)
 
 /*
  * Cap on the re-service loop below. Every pass either drains the RX FIFO,
@@ -675,6 +700,7 @@ static void capi_uart_pl_lite_isr(void *handle)
 			break;
 	}
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(isr)
 /**
  * @brief Poll for and read one byte from the receive FIFO.
  * @note PL: XUartLite_ReadReg().
@@ -702,6 +728,7 @@ static uint32_t capi_uart_pl_lite_read_byte(
 
 	return 1U;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(read_byte)
 /*
  * UART Lite has a single interrupt-enable bit (XUL_CR_ENABLE_INTR) shared by
  * both directions, so a completing transfer must only disable interrupts when
@@ -808,6 +835,7 @@ static int capi_uart_pl_lite_set_irq_tx(struct capi_uart_handle *handle,
 	(void)enable;
 	return -ENOTSUP;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(set_irq_tx)
 
 /**
  * @brief Check if TX buffer is ready for more data.
@@ -826,6 +854,7 @@ static int capi_uart_pl_lite_irq_tx_ready(struct capi_uart_handle *handle,
 	*ready = XUartLite_IsTransmitFull(base) ? false : true;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(irq_tx_ready)
 
 /**
  * @brief Check if transmission is complete.
@@ -845,6 +874,7 @@ static int capi_uart_pl_lite_irq_tx_complete(struct capi_uart_handle *handle,
 	*complete = (sr & XUL_SR_TX_FIFO_EMPTY) ? true : false;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(irq_tx_complete)
 
 /**
  * @brief Enable or disable RX interrupt.
@@ -859,6 +889,7 @@ static int capi_uart_pl_lite_set_irq_rx(struct capi_uart_handle *handle,
 	(void)enable;
 	return -ENOTSUP;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(set_irq_rx)
 
 /**
  * @brief Check if RX data is ready.
@@ -877,6 +908,7 @@ static int capi_uart_pl_lite_irq_rx_ready(struct capi_uart_handle *handle,
 	*ready = XUartLite_IsReceiveEmpty(base) ? false : true;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(irq_rx_ready)
 
 /**
  * @brief Enable or disable error/status interrupt.
@@ -891,6 +923,7 @@ static int capi_uart_pl_lite_set_irq_err(struct capi_uart_handle *handle,
 	(void)enable;
 	return -ENOTSUP;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(set_irq_err)
 
 /**
  * @brief Check if any UART interrupt is pending.
@@ -910,5 +943,6 @@ static int capi_uart_pl_lite_is_irq_pending(struct capi_uart_handle *handle,
 	*pending = (sr & (XUL_SR_RX_FIFO_FULL | XUL_SR_TX_FIFO_EMPTY)) ? true : false;
 	return 0;
 }
+XILINX_UART_PL_LITE_DIRECT_ALIAS(is_irq_pending)
 
 #endif /* XPAR_XUARTLITE_NUM_INSTANCES */

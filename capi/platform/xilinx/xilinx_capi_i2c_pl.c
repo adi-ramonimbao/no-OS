@@ -24,6 +24,15 @@
 #include <string.h>
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_I2C_DIRECT_API) && defined(CONFIG_CAPI_I2C_XILINX_DIRECT_PL)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_I2C_PL_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, capi_i2c_pl, name)
+#else
+#define XILINX_I2C_PL_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XIIC_NUM_INSTANCES
 
 #define I2C_PL_7BIT_MAX_ADDR		0x7FU
@@ -558,6 +567,7 @@ static int capi_i2c_pl_init(struct capi_i2c_controller_handle **handle,
 
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -618,6 +628,7 @@ static int capi_i2c_pl_deinit(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Run a synchronous transmit operation.
@@ -768,6 +779,7 @@ out_free:
 		capi_free(tx_buf);
 	return ret;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Bounded polled master receive (replaces XIic_Recv).
@@ -1078,6 +1090,7 @@ static int capi_i2c_pl_receive(struct capi_i2c_device *device,
 	xh->bus_held = false;
 	return ret;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -1096,6 +1109,7 @@ static int capi_i2c_pl_register_callback(struct capi_i2c_controller_handle
 	xh->callback_arg = callback_arg;
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Configure the I2C bus speed.
@@ -1135,6 +1149,7 @@ static int capi_i2c_pl_configure_bus_speed(struct capi_i2c_controller_handle
 	return capi_i2c_pl_set_bus_clock(xh, speed_hz[speed],
 					 duty_cycle);
 }
+XILINX_I2C_PL_DIRECT_ALIAS(configure_bus_speed)
 
 /**
  * @brief Start an asynchronous transmit operation.
@@ -1269,6 +1284,7 @@ static int capi_i2c_pl_transmit_async(struct capi_i2c_device *device,
 	}
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Start an asynchronous receive operation.
@@ -1426,6 +1442,7 @@ static int capi_i2c_pl_receive_async(struct capi_i2c_device *device,
 	}
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Recover the I2C controller state.
@@ -1493,6 +1510,7 @@ static int capi_i2c_pl_recover_bus(struct capi_i2c_controller_handle *handle)
 
 	return ret;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(recover_bus)
 
 /**
  * @brief Register an I2C target address.
@@ -1537,6 +1555,7 @@ static int capi_i2c_pl_register_target(struct capi_i2c_controller_handle
 	xh->target_addr = addr;
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(register_target)
 
 /**
  * @brief Unregister the I2C target address.
@@ -1567,6 +1586,7 @@ static int capi_i2c_pl_unregister_target(struct capi_i2c_controller_handle
 	xh->target_addr = 0;
 	return 0;
 }
+XILINX_I2C_PL_DIRECT_ALIAS(unregister_target)
 
 /**
  * @brief Dispatch the I2C interrupt into the Xilinx driver.
@@ -1591,6 +1611,7 @@ static void capi_i2c_pl_isr(void *handle)
 			callback(event, callback_arg, status);
 	}
 }
+XILINX_I2C_PL_DIRECT_ALIAS(isr)
 
 /* Master callbacks report bytes remaining; target transmit reports bytes
  * sent. */

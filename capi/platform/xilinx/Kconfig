@@ -1,0 +1,97 @@
+# Xilinx CAPI direct-API variant selectors.
+#
+# Zynq/ZynqMP are hybrids: the PS (Processing System) exposes hard-silicon
+# peripherals (XUartPs, XSpiPs, ...) while the PL (Programmable Logic) can
+# instantiate soft-IP cores (AXI UartLite/NS550, AXI SPI/IIC/GPIO/Timer). Every
+# variant source compiles under CONFIG_CAPI_<CLASS>=y and self-gates on the
+# BSP-provided XPAR_<IP>_NUM_INSTANCES macros; in ops-dispatch mode the
+# application chooses one at runtime via config->ops.
+#
+# Direct mode aliases capi_<class>_* to exactly ONE implementation (see §2 of the
+# direct-API guide), so when a board instantiates more than one variant of a
+# class a selection is required. Only the selected variant emits its link-time
+# aliases; the others keep their ops tables and stay dispatch-only. On a board
+# where only one variant exists in hardware the XPAR gating already makes the
+# class unambiguous, but selecting the matching variant here is always correct.
+
+if CAPI_UART_DIRECT_API
+choice
+	prompt "Xilinx UART direct API variant"
+	default CAPI_UART_XILINX_DIRECT_PS
+	help
+	  Selects which UART backend is aliased to capi_uart_* in direct mode.
+	  Must match the variant the application actually initialises.
+
+config CAPI_UART_XILINX_DIRECT_PS
+	bool "PS UART (XUartPs hardblock)"
+
+config CAPI_UART_XILINX_DIRECT_PL_LITE
+	bool "PL AXI UartLite (XUartLite)"
+
+config CAPI_UART_XILINX_DIRECT_PL_NS550
+	bool "PL AXI 16550 (XUartNs550)"
+endchoice
+endif # CAPI_UART_DIRECT_API
+
+if CAPI_SPI_DIRECT_API
+choice
+	prompt "Xilinx SPI direct API variant"
+	default CAPI_SPI_XILINX_DIRECT_PS
+	help
+	  Selects which SPI backend is aliased to capi_spi_* in direct mode.
+
+config CAPI_SPI_XILINX_DIRECT_PS
+	bool "PS SPI (XSpiPs hardblock)"
+
+config CAPI_SPI_XILINX_DIRECT_PL
+	bool "PL AXI SPI (XSpi)"
+endchoice
+endif # CAPI_SPI_DIRECT_API
+
+if CAPI_GPIO_DIRECT_API
+choice
+	prompt "Xilinx GPIO direct API variant"
+	default CAPI_GPIO_XILINX_DIRECT_PS
+	help
+	  Selects which GPIO backend is aliased to capi_gpio_* in direct mode.
+
+config CAPI_GPIO_XILINX_DIRECT_PS
+	bool "PS GPIO (XGpioPs hardblock)"
+
+config CAPI_GPIO_XILINX_DIRECT_PL
+	bool "PL AXI GPIO (XGpio)"
+endchoice
+endif # CAPI_GPIO_DIRECT_API
+
+if CAPI_TIMER_DIRECT_API
+choice
+	prompt "Xilinx timer direct API variant"
+	default CAPI_TIMER_XILINX_DIRECT_PS_TTC
+	help
+	  Selects which timer backend is aliased to capi_timer_* in direct mode.
+
+config CAPI_TIMER_XILINX_DIRECT_PS_TTC
+	bool "PS TTC (XTtcPs triple timer counter)"
+
+config CAPI_TIMER_XILINX_DIRECT_PS_SCU
+	bool "PS SCU private timer (XScuTimer)"
+
+config CAPI_TIMER_XILINX_DIRECT_PL
+	bool "PL AXI Timer (XTmrCtr)"
+endchoice
+endif # CAPI_TIMER_DIRECT_API
+
+if CAPI_I2C_DIRECT_API
+choice
+	prompt "Xilinx I2C direct API variant"
+	default CAPI_I2C_XILINX_DIRECT_PS
+	help
+	  Selects which I2C backend is aliased to capi_i2c_* in direct mode.
+
+config CAPI_I2C_XILINX_DIRECT_PS
+	bool "PS I2C (XIicPs hardblock)"
+
+config CAPI_I2C_XILINX_DIRECT_PL
+	bool "PL AXI IIC (XIic)"
+endchoice
+endif # CAPI_I2C_DIRECT_API

@@ -22,6 +22,15 @@
 #include "capi_irq.h"
 #include "xinterrupt_wrap.h"
 
+
+#if defined(CONFIG_CAPI_UART_DIRECT_API) && defined(CONFIG_CAPI_UART_XILINX_DIRECT_PS)
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define XILINX_UART_PS_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, capi_uart_ps, name)
+#else
+#define XILINX_UART_PS_DIRECT_ALIAS(name)
+#endif
 #ifdef XPAR_XUARTPS_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */
@@ -244,6 +253,7 @@ static int capi_uart_ps_init(struct capi_uart_handle **handle,
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the CAPI backend instance.
@@ -285,6 +295,7 @@ static int capi_uart_ps_deinit(struct capi_uart_handle *handle)
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Get the UART line configuration.
@@ -343,6 +354,7 @@ static int capi_uart_ps_get_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(get_line_config)
 
 /**
  * @brief Set the UART line configuration.
@@ -426,6 +438,7 @@ static int capi_uart_ps_set_line_config(struct capi_uart_handle *handle,
 	memcpy(&xh->line_config, line_config, sizeof(*line_config));
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(set_line_config)
 
 /**
  * @brief Enable or disable UART FIFO behavior.
@@ -440,6 +453,7 @@ static int capi_uart_ps_enable_fifo(struct capi_uart_handle *handle,
 	(void)enable;
 	return 0; /* XUartPs always uses FIFO */
 }
+XILINX_UART_PS_DIRECT_ALIAS(enable_fifo)
 
 /**
  * @brief Flush the UART TX FIFO.
@@ -457,6 +471,7 @@ static int capi_uart_ps_flush_tx_fifo(struct capi_uart_handle *handle)
 		;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(flush_tx_fifo)
 
 /**
  * @brief Flush the UART RX FIFO.
@@ -475,6 +490,7 @@ static int capi_uart_ps_flush_rx_fifo(struct capi_uart_handle *handle)
 		(void)XUartPs_RecvByte(base);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(flush_rx_fifo)
 
 /**
  * @brief Get the UART RX FIFO occupancy.
@@ -492,6 +508,7 @@ static int capi_uart_ps_get_rx_fifo_count(struct capi_uart_handle *handle,
 	*count = XUartPs_IsReceiveData(inst(xh)->Config.BaseAddress) ? 1 : 0;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(get_rx_fifo_count)
 
 /**
  * @brief Get the UART TX FIFO occupancy.
@@ -509,6 +526,7 @@ static int capi_uart_ps_get_tx_fifo_count(struct capi_uart_handle *handle,
 	*count = XUartPs_IsTransmitEmpty(inst(xh)) ? 0 : 1;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(get_tx_fifo_count)
 
 /**
  * @brief Run a synchronous transmit operation.
@@ -540,6 +558,7 @@ static int capi_uart_ps_transmit(struct capi_uart_handle *handle, uint8_t *buf,
 	}
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Run a synchronous receive operation.
@@ -564,6 +583,7 @@ static int capi_uart_ps_receive(struct capi_uart_handle *handle, uint8_t *buf,
 		total += XUartPs_Recv(inst(xh), buf + total, len - total);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register the CAPI asynchronous callback.
@@ -587,6 +607,7 @@ static int capi_uart_ps_register_callback(struct capi_uart_handle *handle,
 		capi_irq_enable(xh->irq_id);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Start an asynchronous transmit operation.
@@ -625,6 +646,7 @@ static int capi_uart_ps_transmit_async(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Start an asynchronous receive operation.
@@ -668,6 +690,7 @@ static int capi_uart_ps_receive_async(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Get the last UART interrupt reason.
@@ -685,6 +708,7 @@ static int capi_uart_ps_get_interrupt_reason(struct capi_uart_handle *handle,
 	*reason = xh->last_interrupt_reason;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(get_interrupt_reason)
 
 /**
  * @brief Get UART line status flags.
@@ -728,6 +752,7 @@ static int capi_uart_ps_get_line_status(struct capi_uart_handle *handle,
 
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(get_line_status)
 
 /**
  * @brief Dispatch the backend interrupt handler.
@@ -742,6 +767,7 @@ static void capi_uart_ps_isr(void *handle)
 	struct capi_uart_xilinx_handle *xh = ((struct capi_uart_handle *)handle)->priv;
 	XUartPs_InterruptHandler(inst(xh));
 }
+XILINX_UART_PS_DIRECT_ALIAS(isr)
 
 static void ps_tx_done(struct capi_uart_xilinx_handle *xh, u32 event_data)
 {
@@ -849,6 +875,7 @@ static int capi_uart_ps_set_irq_tx(struct capi_uart_handle *handle, bool enable)
 	XUartPs_SetInterruptMask(inst(xh), mask);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(set_irq_tx)
 
 /**
  * @brief Check if TX buffer is ready for more data.
@@ -866,6 +893,7 @@ static int capi_uart_ps_irq_tx_ready(struct capi_uart_handle *handle,
 	*ready = XUartPs_IsTransmitEmpty(inst(xh)) ? true : false;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(irq_tx_ready)
 
 /**
  * @brief Check if transmission is complete.
@@ -883,6 +911,7 @@ static int capi_uart_ps_irq_tx_complete(struct capi_uart_handle *handle,
 	*complete = XUartPs_IsTransmitEmpty(inst(xh)) ? true : false;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(irq_tx_complete)
 
 /**
  * @brief Enable or disable RX interrupt.
@@ -904,6 +933,7 @@ static int capi_uart_ps_set_irq_rx(struct capi_uart_handle *handle, bool enable)
 	XUartPs_SetInterruptMask(inst(xh), mask);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(set_irq_rx)
 
 /**
  * @brief Check if RX data is ready.
@@ -922,6 +952,7 @@ static int capi_uart_ps_irq_rx_ready(struct capi_uart_handle *handle,
 	*ready = XUartPs_IsReceiveData(base) ? true : false;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(irq_rx_ready)
 
 /**
  * @brief Enable or disable error/status interrupt.
@@ -946,6 +977,7 @@ static int capi_uart_ps_set_irq_err(struct capi_uart_handle *handle,
 	XUartPs_SetInterruptMask(inst(xh), mask);
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(set_irq_err)
 
 /**
  * @brief Check if any UART interrupt is pending.
@@ -965,5 +997,6 @@ static int capi_uart_ps_is_irq_pending(struct capi_uart_handle *handle,
 	*pending = (isr != 0) ? true : false;
 	return 0;
 }
+XILINX_UART_PS_DIRECT_ALIAS(is_irq_pending)
 
 #endif /* XPAR_XUARTPS_NUM_INSTANCES */
