@@ -9,6 +9,15 @@
 #include <errno.h>
 #include <string.h>
 
+#ifdef CONFIG_CAPI_DMA_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_DMA_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_dma, stm32_capi_dma, name)
+#else
+#define STM32_DMA_DIRECT_ALIAS(name)
+#endif
+
 #define MAX_DMA_CHANNELS 16
 
 static struct capi_dma_handle *dma_handle_singleton = NULL;
@@ -127,6 +136,7 @@ static int stm32_capi_dma_init(struct capi_dma_handle **handle,
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the STM32 DMA controller.
@@ -166,6 +176,7 @@ static int stm32_capi_dma_deinit(struct capi_dma_handle *handle)
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Initialize a DMA channel.
@@ -222,6 +233,7 @@ static int stm32_capi_dma_init_chan(struct capi_dma_handle *handle,
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(init_chan)
 
 /**
  * @brief Deinitialize a DMA channel.
@@ -256,6 +268,7 @@ static int stm32_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(deinit_chan)
 
 /**
  * @brief Configure a DMA transfer.
@@ -382,6 +395,7 @@ static int stm32_capi_dma_config_xfer(struct capi_dma_chan *chan,
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(config_xfer)
 
 /**
  * @brief Start a DMA transfer.
@@ -423,6 +437,7 @@ static int stm32_capi_dma_xfer_start(struct capi_dma_chan *chan)
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(xfer_start)
 
 /**
  * @brief Abort an ongoing DMA transfer.
@@ -449,6 +464,7 @@ static int stm32_capi_dma_xfer_abort(struct capi_dma_chan *chan)
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(xfer_abort)
 
 /**
  * @brief Check if a DMA channel transfer is completed.
@@ -466,6 +482,7 @@ static bool stm32_capi_dma_chan_is_completed(const struct capi_dma_chan *chan)
 
 	return chan_priv->completed;
 }
+STM32_DMA_DIRECT_ALIAS(chan_is_completed)
 
 /**
  * @brief DMA controller interrupt handler.
@@ -477,6 +494,7 @@ static int stm32_capi_dma_isr(struct capi_dma_handle *handle)
 	(void)handle;
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(isr)
 
 /**
  * @brief DMA channel interrupt handler.
@@ -496,6 +514,7 @@ static int stm32_capi_dma_isr_chan(struct capi_dma_chan *chan)
 
 	return 0;
 }
+STM32_DMA_DIRECT_ALIAS(isr_chan)
 
 const struct capi_dma_ops stm32_capi_dma_ops = {
 	.init = stm32_capi_dma_init,

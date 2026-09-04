@@ -11,6 +11,15 @@
 #include "stm32_capi_gpio_priv.h"
 #include "capi_alloc.h"
 #include "capi_time.h"
+
+#ifdef CONFIG_CAPI_SPI_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_SPI_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_spi, stm32_capi_spi, name)
+#else
+#define STM32_SPI_DIRECT_ALIAS(name)
+#endif
 #ifdef HAL_TIM_MODULE_ENABLED
 #include "capi_timer.h"
 #endif
@@ -374,6 +383,7 @@ error:
 	}
 	return ret;
 }
+STM32_SPI_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the STM32 SPI controller and free resources.
@@ -431,6 +441,7 @@ static int stm32_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Setup GPIO CS pin for the device using CAPI GPIO.
@@ -644,6 +655,7 @@ static int stm32_capi_spi_transceive(struct capi_spi_device *device,
 	/* Perform the transfer with CS control */
 	return perform_spi_transfer_with_cs(priv_handle, device, transfer, true, true);
 }
+STM32_SPI_DIRECT_ALIAS(transceive)
 
 /**
  * @brief Perform an asynchronous SPI transceive operation using interrupts.
@@ -730,6 +742,7 @@ static int stm32_capi_spi_transceive_async(struct capi_spi_device *device,
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(transceive_async)
 
 /**
  * @brief Perform a synchronous SPI read command (TX then RX).
@@ -835,6 +848,7 @@ deassert_cs:
 
 	return ret;
 }
+STM32_SPI_DIRECT_ALIAS(read_command)
 
 /**
  * @brief Perform an asynchronous SPI read command using interrupts.
@@ -914,6 +928,7 @@ static int stm32_capi_spi_read_command_async(struct capi_spi_device *device,
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(read_command_async)
 
 /**
  * @brief Tear down an in-flight IT transfer without relying on the SPI ISR.
@@ -1003,6 +1018,7 @@ static int stm32_capi_spi_abort_async(struct capi_spi_device *device)
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(abort_async)
 
 /**
  * @brief Register a callback for SPI events.
@@ -1027,6 +1043,7 @@ static int stm32_capi_spi_register_callback(struct capi_spi_controller_handle
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Manually control the chip select line.
@@ -1072,6 +1089,7 @@ static int stm32_capi_spi_set_cs(struct capi_spi_device *device,
 
 	return 0;
 }
+STM32_SPI_DIRECT_ALIAS(set_cs)
 
 /**
  * @brief SPI interrupt service routine handler.
@@ -1089,6 +1107,7 @@ static void stm32_capi_spi_isr(void *handle)
 	priv_handle = controller_handle->priv;
 	HAL_SPI_IRQHandler(priv_handle->hspi);
 }
+STM32_SPI_DIRECT_ALIAS(isr)
 
 /**
  * @brief Transfer multiple SPI messages in sequence.

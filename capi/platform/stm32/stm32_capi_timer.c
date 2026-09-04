@@ -9,6 +9,15 @@
 #include "capi_alloc.h"
 #include "stm32_capi_timer_priv.h"
 
+#ifdef CONFIG_CAPI_TIMER_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_TIMER_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_timer, stm32_capi_timer, name)
+#else
+#define STM32_TIMER_DIRECT_ALIAS(name)
+#endif
+
 #ifdef HAL_TIM_MODULE_ENABLED
 
 #define NSEC_PER_SEC			1000000000ULL
@@ -330,6 +339,7 @@ error:
 	}
 	return ret;
 }
+STM32_TIMER_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the STM32 timer.
@@ -357,6 +367,7 @@ static int stm32_capi_timer_deinit(struct capi_timer_handle *handle)
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Start the timer counter.
@@ -380,6 +391,7 @@ static int stm32_capi_timer_start(struct capi_timer_handle *handle)
 
 	return (ret == HAL_OK) ? 0 : -EIO;
 }
+STM32_TIMER_DIRECT_ALIAS(start)
 
 /**
  * @brief Stop the timer counter.
@@ -403,6 +415,7 @@ static int stm32_capi_timer_stop(struct capi_timer_handle *handle)
 
 	return (ret == HAL_OK) ? 0 : -EIO;
 }
+STM32_TIMER_DIRECT_ALIAS(stop)
 
 /**
  * @brief Configure the timer counter.
@@ -441,6 +454,7 @@ static int stm32_capi_timer_counter_config(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(counter_config)
 
 /**
  * @brief Get the current counter value.
@@ -461,6 +475,7 @@ static int stm32_capi_timer_counter_get(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(counter_get)
 
 /**
  * @brief Enable timer event IRQ.
@@ -488,6 +503,7 @@ static int stm32_capi_timer_event_irq_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(event_irq_enable)
 
 /**
  * @brief Disable timer event IRQ.
@@ -515,6 +531,7 @@ static int stm32_capi_timer_event_irq_disable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(event_irq_disable)
 
 /**
  * @brief Register a global timer event callback.
@@ -539,6 +556,7 @@ static int stm32_capi_timer_register_event_callback(
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(register_event_callback)
 
 /**
  * @brief Initialize a timer channel.
@@ -565,6 +583,7 @@ static int stm32_capi_timer_channel_init(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_init)
 
 /**
  * @brief Deinitialize a timer channel.
@@ -607,6 +626,7 @@ static int stm32_capi_timer_channel_deinit(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_deinit)
 
 /**
  * @brief Configure a timer channel.
@@ -721,6 +741,7 @@ static int stm32_capi_timer_channel_config(
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_config)
 
 /**
  * @brief Enable a timer channel.
@@ -764,6 +785,7 @@ static int stm32_capi_timer_channel_enable(struct capi_timer_handle *handle,
 	priv->channels[chan].enabled = true;
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_enable)
 
 /**
  * @brief Disable a timer channel.
@@ -807,6 +829,7 @@ static int stm32_capi_timer_channel_disable(struct capi_timer_handle *handle,
 	priv->channels[chan].enabled = false;
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_disable)
 
 /**
  * @brief Set compare value for a timer channel.
@@ -835,6 +858,7 @@ static int stm32_capi_timer_channel_compare_set(struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_compare_set)
 
 /**
  * @brief Get compare value from a timer channel.
@@ -863,6 +887,7 @@ static int stm32_capi_timer_channel_compare_get(struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_compare_get)
 
 /**
  * @brief Get capture value from a timer channel.
@@ -891,6 +916,7 @@ static int stm32_capi_timer_channel_capture_get(struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_capture_get)
 
 /**
  * @brief Enable channel IRQ.
@@ -918,6 +944,7 @@ static int stm32_capi_timer_channel_irq_enable(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_irq_enable)
 
 /**
  * @brief Disable channel IRQ.
@@ -946,6 +973,7 @@ static int stm32_capi_timer_channel_irq_disable(struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_irq_disable)
 
 /**
  * @brief Register a channel-specific callback.
@@ -975,6 +1003,7 @@ static int stm32_capi_timer_channel_register_callback(
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(channel_register_callback)
 
 /**
  * @brief Check if any timer IRQ is pending.
@@ -999,6 +1028,7 @@ static int stm32_capi_timer_is_irq_pending(struct capi_timer_handle *handle,
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(is_irq_pending)
 
 /**
  * @brief Timer interrupt service routine.
@@ -1039,6 +1069,7 @@ static void stm32_capi_timer_isr(struct capi_timer_handle *handle)
 		}
 	}
 }
+STM32_TIMER_DIRECT_ALIAS(isr)
 
 /**
  * @brief Convert nanoseconds to timer ticks.
@@ -1062,6 +1093,7 @@ static int stm32_capi_timer_nsec_to_ticks(const struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(nsec_to_ticks)
 
 /**
  * @brief Convert timer ticks to nanoseconds.
@@ -1088,6 +1120,7 @@ static int stm32_capi_timer_ticks_to_nsec(const struct capi_timer_handle
 
 	return 0;
 }
+STM32_TIMER_DIRECT_ALIAS(ticks_to_nsec)
 
 const struct capi_timer_ops stm32_capi_timer_ops = {
 	.init = stm32_capi_timer_init,

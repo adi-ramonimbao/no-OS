@@ -9,6 +9,15 @@
 #include "capi_alloc.h"
 #include "stm32_capi_gpio_priv.h"
 
+#ifdef CONFIG_CAPI_GPIO_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_GPIO_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, stm32_capi_gpio, name)
+#else
+#define STM32_GPIO_DIRECT_ALIAS(name)
+#endif
+
 /** Maximum number of pins per STM32 GPIO port */
 #define STM32_GPIO_PINS_PER_PORT 16
 
@@ -348,6 +357,7 @@ static int stm32_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 	*handle = port_handle;
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_init)
 
 /**
  * @brief Deinitialize a GPIO port.
@@ -371,6 +381,7 @@ static int stm32_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
 	*handle = NULL;
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_deinit)
 
 /**
  * @brief Set direction for all pins in the port.
@@ -411,6 +422,7 @@ static int stm32_capi_gpio_port_set_direction(struct capi_gpio_port_handle
 	priv->direction_mask = (uint16_t)direction_bitmask;
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_set_direction)
 
 /**
  * @brief Get direction of all pins in the port.
@@ -431,6 +443,7 @@ static int stm32_capi_gpio_port_get_direction(struct capi_gpio_port_handle
 	*direction_bitmask = priv->direction_mask;
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_get_direction)
 
 /**
  * @brief Set value for all pins in the port (considering ACTIVE_LOW flags).
@@ -452,6 +465,7 @@ static int stm32_capi_gpio_port_set_value(struct capi_gpio_port_handle *handle,
 	return stm32_capi_gpio_port_set_raw_value(handle,
 			value_bitmask ^ (uint64_t)priv->active_low_mask);
 }
+STM32_GPIO_DIRECT_ALIAS(port_set_value)
 
 /**
  * @brief Get value of all pins in the port (considering ACTIVE_LOW flags).
@@ -478,6 +492,7 @@ static int stm32_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
 	*value_bitmask ^= (uint64_t)priv->active_low_mask;
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_get_value)
 
 /**
  * @brief Set raw value for all pins (ignoring ACTIVE_LOW flag).
@@ -507,6 +522,7 @@ static int stm32_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_set_raw_value)
 
 /**
  * @brief Get raw value of all pins (ignoring ACTIVE_LOW flag).
@@ -530,6 +546,7 @@ static int stm32_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_get_raw_value)
 
 /**
  * @brief Toggle the selected output pins of the port.
@@ -569,6 +586,7 @@ static int stm32_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(port_toggle)
 
 /**
  * @brief Set direction for a single pin.
@@ -617,6 +635,7 @@ static int stm32_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_set_direction)
 
 /**
  * @brief Get direction of a single pin.
@@ -644,6 +663,7 @@ static int stm32_capi_gpio_pin_get_direction(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_get_direction)
 
 /**
  * @brief Set value for a single pin (considering ACTIVE_LOW flag).
@@ -664,6 +684,7 @@ static int stm32_capi_gpio_pin_set_value(struct capi_gpio_pin *pin,
 
 	return stm32_capi_gpio_pin_set_raw_value(pin, raw_value);
 }
+STM32_GPIO_DIRECT_ALIAS(pin_set_value)
 
 /**
  * @brief Get value of a single pin (considering ACTIVE_LOW flag).
@@ -689,6 +710,7 @@ static int stm32_capi_gpio_pin_get_value(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_get_value)
 
 /**
  * @brief Set raw value for a single pin (ignoring ACTIVE_LOW flag).
@@ -717,6 +739,7 @@ static int stm32_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_set_raw_value)
 
 /**
  * @brief Get raw value of a single pin (ignoring ACTIVE_LOW flag).
@@ -743,6 +766,7 @@ static int stm32_capi_gpio_pin_get_raw_value(struct capi_gpio_pin *pin,
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_get_raw_value)
 
 /**
  * @brief Toggle a single output pin.
@@ -776,6 +800,7 @@ static int stm32_capi_gpio_pin_toggle(struct capi_gpio_pin *pin)
 
 	return 0;
 }
+STM32_GPIO_DIRECT_ALIAS(pin_toggle)
 
 /**
  * @brief STM32 platform specific GPIO operations for CAPI

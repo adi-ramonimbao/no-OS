@@ -10,6 +10,15 @@
 #include <sys/stat.h>
 #include <stdio.h>
 
+#ifdef CONFIG_CAPI_UART_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_UART_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, stm32_capi_uart, name)
+#else
+#define STM32_UART_DIRECT_ALIAS(name)
+#endif
+
 /** Maximum number of UART instances tracked for HAL callback routing.
  * 12 covers all known STM32 families (up to 10 on H7/H5, plus headroom). */
 #define STM32_CAPI_UART_MAX_INSTANCES 12
@@ -166,6 +175,7 @@ error:
 
 	return ret;
 }
+STM32_UART_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the STM32 UART peripheral and free resources.
@@ -193,6 +203,7 @@ static int stm32_capi_uart_deinit(struct capi_uart_handle *handle)
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Get the current UART line configuration from the STM32 HAL handle.
@@ -263,6 +274,7 @@ static int stm32_capi_uart_get_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_line_config)
 
 /**
  * @brief Set a new UART line configuration on the STM32 peripheral.
@@ -336,6 +348,7 @@ static int stm32_capi_uart_set_line_config(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(set_line_config)
 
 /**
  * @brief Transmit data over the STM32 UART peripheral.
@@ -372,6 +385,7 @@ static int stm32_capi_uart_transmit(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Receive data from the STM32 UART peripheral.
@@ -408,6 +422,7 @@ static int stm32_capi_uart_receive(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register a user callback for UART async events.
@@ -431,6 +446,7 @@ static int stm32_capi_uart_register_callback(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Transmit data asynchronously (interrupt-driven).
@@ -463,6 +479,7 @@ static int stm32_capi_uart_transmit_async(struct capi_uart_handle *handle,
 		return -EIO;
 	}
 }
+STM32_UART_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Receive data asynchronously (interrupt-driven).
@@ -495,6 +512,7 @@ static int stm32_capi_uart_receive_async(struct capi_uart_handle *handle,
 		return -EIO;
 	}
 }
+STM32_UART_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Get the reason for the most recent UART interrupt.
@@ -516,6 +534,7 @@ static int stm32_capi_uart_get_interrupt_reason(
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_interrupt_reason)
 
 /**
  * @brief Get accumulated line status flags.
@@ -537,6 +556,7 @@ static int stm32_capi_uart_get_line_status(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_line_status)
 
 /*
  * ---------------------------------------------------------------------------
@@ -580,6 +600,7 @@ static int stm32_capi_uart_enable_fifo(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(enable_fifo)
 
 /**
  * @brief Drain the TX path (wait for transmission complete).
@@ -603,6 +624,7 @@ static int stm32_capi_uart_flush_tx_fifo(struct capi_uart_handle *handle)
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(flush_tx_fifo)
 
 /**
  * @brief Discard any pending received data.
@@ -643,6 +665,7 @@ static int stm32_capi_uart_flush_rx_fifo(struct capi_uart_handle *handle)
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(flush_rx_fifo)
 
 /**
  * @brief Report RX data-register occupancy (0 or 1).
@@ -663,6 +686,7 @@ static int stm32_capi_uart_get_rx_fifo_count(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_rx_fifo_count)
 
 /**
  * @brief Report TX data-register occupancy (0 or 1).
@@ -683,6 +707,7 @@ static int stm32_capi_uart_get_tx_fifo_count(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_tx_fifo_count)
 
 /**
  * @brief Non-blocking single-byte read from RDR.
@@ -711,6 +736,7 @@ static uint32_t stm32_capi_uart_read_byte(struct capi_uart_handle *handle,
 
 	return 1U;
 }
+STM32_UART_DIRECT_ALIAS(read_byte)
 
 /**
  * @brief Non-blocking single-byte write to TDR.
@@ -739,6 +765,7 @@ static uint32_t stm32_capi_uart_write_byte(struct capi_uart_handle *handle,
 
 	return 1U;
 }
+STM32_UART_DIRECT_ALIAS(write_byte)
 
 /**
  * @brief Enable or disable the TX-data-register-empty interrupt.
@@ -763,6 +790,7 @@ static int stm32_capi_uart_set_irq_tx(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(set_irq_tx)
 
 /**
  * @brief Report whether TDR can accept a new byte.
@@ -783,6 +811,7 @@ static int stm32_capi_uart_irq_tx_ready(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(irq_tx_ready)
 
 /**
  * @brief Report whether the last transmission has fully completed.
@@ -803,6 +832,7 @@ static int stm32_capi_uart_irq_tx_complete(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(irq_tx_complete)
 
 /**
  * @brief Enable or disable the RX-data-register-not-empty interrupt.
@@ -827,6 +857,7 @@ static int stm32_capi_uart_set_irq_rx(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(set_irq_rx)
 
 /**
  * @brief Report whether a received byte is waiting in RDR.
@@ -847,6 +878,7 @@ static int stm32_capi_uart_irq_rx_ready(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(irq_rx_ready)
 
 /**
  * @brief Enable or disable the RX error interrupts (parity + frame/noise/overrun).
@@ -877,6 +909,7 @@ static int stm32_capi_uart_set_irq_err(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(set_irq_err)
 
 /**
  * @brief Report whether any enabled UART interrupt currently has its flag set.
@@ -923,6 +956,7 @@ static int stm32_capi_uart_is_irq_pending(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(is_irq_pending)
 
 /**
  * @brief Transmit one 9-bit frame (multi-drop address or data).
@@ -968,6 +1002,7 @@ static int stm32_capi_uart_transmit_9bit(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(transmit_9bit)
 
 /**
  * @brief Receive one 9-bit frame (multi-drop address or data).
@@ -1010,6 +1045,7 @@ static int stm32_capi_uart_receive_9bit(struct capi_uart_handle *handle,
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(receive_9bit)
 
 /**
  * @brief Manually drive RTS/CTS (not supported on STM32).
@@ -1031,6 +1067,7 @@ static int stm32_capi_uart_set_flow_control_state(struct capi_uart_handle
 
 	return -ENOTSUP;
 }
+STM32_UART_DIRECT_ALIAS(set_flow_control_state)
 
 /**
  * @brief Read back the RTS/CTS line state.
@@ -1058,6 +1095,7 @@ static int stm32_capi_uart_get_flow_control_state(struct capi_uart_handle
 
 	return 0;
 }
+STM32_UART_DIRECT_ALIAS(get_flow_control_state)
 
 /**
  * @brief UART ISR entry point — delegates to HAL_UART_IRQHandler.
@@ -1075,6 +1113,7 @@ static void stm32_capi_uart_isr(void *handle)
 
 	HAL_UART_IRQHandler(priv->huart);
 }
+STM32_UART_DIRECT_ALIAS(isr)
 
 /*
  * STM32 HAL weak-override callbacks.

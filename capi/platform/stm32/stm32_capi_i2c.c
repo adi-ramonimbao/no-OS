@@ -9,6 +9,15 @@
 #include "stm32_capi_i2c_priv.h"
 #include "capi_alloc.h"
 
+#ifdef CONFIG_CAPI_I2C_DIRECT_API
+#define CAPI_DIRECT_API
+#include <capi_direct.h>
+#define STM32_I2C_DIRECT_ALIAS(name) \
+	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, stm32_capi_i2c, name)
+#else
+#define STM32_I2C_DIRECT_ALIAS(name)
+#endif
+
 #define MAX_I2C_INSTANCES		4
 #define STM32_I2C_DEFAULT_CLOCK_HZ	100000
 #define STM32_I2C_DEFAULT_TIMING	0x10909CECU
@@ -213,6 +222,7 @@ error:
 	}
 	return ret;
 }
+STM32_I2C_DIRECT_ALIAS(init)
 
 /**
  * @brief Deinitialize the STM32 I2C controller.
@@ -240,6 +250,7 @@ static int stm32_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(deinit)
 
 /**
  * @brief Synchronous I2C transmit operation.
@@ -308,6 +319,7 @@ static int stm32_capi_i2c_transmit(struct capi_i2c_device *device,
 		return -EIO;
 	}
 }
+STM32_I2C_DIRECT_ALIAS(transmit)
 
 /**
  * @brief Synchronous I2C receive operation.
@@ -376,6 +388,7 @@ static int stm32_capi_i2c_receive(struct capi_i2c_device *device,
 		return -EIO;
 	}
 }
+STM32_I2C_DIRECT_ALIAS(receive)
 
 /**
  * @brief Register an async event callback for I2C operations.
@@ -400,6 +413,7 @@ static int stm32_capi_i2c_register_callback(struct capi_i2c_controller_handle
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(register_callback)
 
 /**
  * @brief Configure I2C bus speed.
@@ -453,6 +467,7 @@ static int stm32_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(configure_bus_speed)
 
 /**
  * @brief Asynchronous I2C transmit operation.
@@ -520,6 +535,7 @@ static int stm32_capi_i2c_transmit_async(struct capi_i2c_device *device,
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(transmit_async)
 
 /**
  * @brief Asynchronous I2C receive operation.
@@ -587,6 +603,7 @@ static int stm32_capi_i2c_receive_async(struct capi_i2c_device *device,
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(receive_async)
 
 /**
  * @brief Recover the I2C bus by reinitializing the peripheral.
@@ -612,6 +629,7 @@ static int stm32_capi_i2c_recover_bus(struct capi_i2c_controller_handle *handle)
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(recover_bus)
 
 /**
  * @brief Register the I2C controller as a target device.
@@ -645,6 +663,7 @@ static int stm32_capi_i2c_register_target(struct capi_i2c_controller_handle
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(register_target)
 
 /**
  * @brief Unregister the I2C controller from target mode.
@@ -673,6 +692,7 @@ static int stm32_capi_i2c_unregister_target(struct capi_i2c_controller_handle
 
 	return 0;
 }
+STM32_I2C_DIRECT_ALIAS(unregister_target)
 
 /**
  * @brief I2C interrupt service routine handler.
@@ -692,6 +712,7 @@ static void stm32_capi_i2c_isr(void *handle)
 	HAL_I2C_EV_IRQHandler(&priv_handle->hi2c);
 	HAL_I2C_ER_IRQHandler(&priv_handle->hi2c);
 }
+STM32_I2C_DIRECT_ALIAS(isr)
 
 /**
  * @brief HAL I2C master transmit complete callback.
