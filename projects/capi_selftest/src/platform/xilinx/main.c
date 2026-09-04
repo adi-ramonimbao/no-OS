@@ -38,18 +38,23 @@ extern int example_main(void);
 
 #if defined(GPIO_SEL_PL)
 /*
- * PL backend: the dual-channel AXI GPIO loopback core raises ip2intc_irpt on a
- * channel-2 (input) change. The whole channel is the interrupt source; there is
- * no per-pin number. The core's fabric line feeds the GIC (SPI) on a GIC-only
- * build or the AXI INTC input on a cascade build; XPAR_XGPIO_1_INTERRUPT_PARENT
- * low bit is 1 for INTC, so pick the encoding from the SDT descriptor.
+ * PL backend: the AXI GPIO input core raises ip2intc_irpt on any change to its
+ * input register. The whole channel is the interrupt source; there is no per-pin
+ * number. The core's fabric line feeds the GIC (SPI) on a GIC-only build or the
+ * AXI INTC input on a cascade build; XPAR_XGPIO_1_INTERRUPT_PARENT low bit is 1
+ * for INTC, so pick the encoding from the SDT descriptor.
+ *
+ * The input is channel 1 of a single-channel core (GPIO_1, IS_DUAL=0) wired to
+ * the output core GPIO_0 -- so arm the channel-1 interrupt bit. (The older
+ * dual-channel loopback IP put the input on channel 2 of one core; that is no
+ * longer the topology.)
  */
 #include <xgpio.h>
 #include <xinterrupt_wrap.h>
 
 static XGpio gpio_irq_inst;
 
-#define GPIO_IRQ_CH2_MASK	0x2U	/* XGpio channel-2 interrupt bit */
+#define GPIO_IRQ_CH1_MASK	0x1U	/* XGpio channel-1 interrupt bit */
 
 int platform_gpio_irq_arm(uint32_t *irq_line)
 {
@@ -73,9 +78,9 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 	    XST_SUCCESS)
 		return -EIO;
 
-	/* Enable channel-2 change interrupt and the core's global gate. */
-	XGpio_InterruptClear(&gpio_irq_inst, GPIO_IRQ_CH2_MASK);
-	XGpio_InterruptEnable(&gpio_irq_inst, GPIO_IRQ_CH2_MASK);
+	/* Enable channel-1 change interrupt and the core's global gate. */
+	XGpio_InterruptClear(&gpio_irq_inst, GPIO_IRQ_CH1_MASK);
+	XGpio_InterruptEnable(&gpio_irq_inst, GPIO_IRQ_CH1_MASK);
 	XGpio_InterruptGlobalEnable(&gpio_irq_inst);
 
 #if (XPAR_XGPIO_1_INTERRUPT_PARENT & 0x1U)
@@ -94,8 +99,8 @@ bool platform_gpio_irq_ack(void)
 {
 	uint32_t status = XGpio_InterruptGetStatus(&gpio_irq_inst);
 
-	if (status & GPIO_IRQ_CH2_MASK) {
-		XGpio_InterruptClear(&gpio_irq_inst, GPIO_IRQ_CH2_MASK);
+	if (status & GPIO_IRQ_CH1_MASK) {
+		XGpio_InterruptClear(&gpio_irq_inst, GPIO_IRQ_CH1_MASK);
 		return true;
 	}
 	return false;
@@ -103,7 +108,7 @@ bool platform_gpio_irq_ack(void)
 
 void platform_gpio_irq_disarm(void)
 {
-	XGpio_InterruptDisable(&gpio_irq_inst, GPIO_IRQ_CH2_MASK);
+	XGpio_InterruptDisable(&gpio_irq_inst, GPIO_IRQ_CH1_MASK);
 }
 
 #else /* GPIO_SEL_PS */

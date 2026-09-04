@@ -21,55 +21,21 @@
 #include "xinterrupt_wrap.h"
 
 /*
- * Cora Z7 configuration, keyed to the IRQ delivery mode so each of the three
- * builds exercises a different set of backends off one board file. The mode is
- * auto-detected from the BSP just below (override by defining IRQ_SEL_GIC,
- * IRQ_SEL_CASCADE, or IRQ_SEL_NOIRQ before this file); the IRQ topology section
- * further down consumes the same decision.
+ * Cora Z7 configuration
  *
  *   mode      GPIO  SPI  I2C  I2C-tgt  Timer  UART-async
  *   GIC       PS    PL   PL   PS       TTC    NS550
- *   CASCADE   PL    PS   PS   PL       AXI    Lite
- *   no-IRQ    PS    PL   PL   PS       SCU    PS
+ *     		   PL    PS   PS   PL       AXI    Lite
+ *      	   					        SCU    PS
  *
- * The 2-way peripherals swap PS<->PL between GIC and CASCADE, and no-IRQ mirrors
- * GIC. The 3-way peripherals (Timer, UART) take their third option under no-IRQ:
- * SCU and PS. PS UART async still works with no fabric IRQ wired because the PS
- * UART keeps its own GIC line (XPAR_XUARTPS_0_INTERRUPTS is present regardless).
  */
-#if !defined(IRQ_SEL_GIC) && !defined(IRQ_SEL_CASCADE) && !defined(IRQ_SEL_NOIRQ)
-#if defined(XPAR_XINTC_NUM_INSTANCES)
-#define IRQ_SEL_CASCADE
-#elif defined(XPAR_XIIC_0_INTERRUPTS) || defined(XPAR_XSPI_0_INTERRUPTS) || \
-      defined(XPAR_XUARTNS550_0_INTERRUPTS) || defined(XPAR_XUARTLITE_0_INTERRUPTS)
-#define IRQ_SEL_GIC
-#else
-#define IRQ_SEL_NOIRQ
-#endif
-#endif
-
-#if defined(IRQ_SEL_CASCADE)
-#define GPIO_SEL_PL
+/* GIC only — no CASCADE, no NOIRQ */
+#define GPIO_SEL_PS
 #define SPI_SEL_PS
-#define I2C_SEL_PS
-#define I2C_TARGET_SEL_PL
+#define I2C_SEL_PL
+#define I2C_TARGET_SEL_PS
 #define TIMER_SELECT		TIMER_SEL_AXI
-#define UART_ASYNC_SEL_PL_LITE
-#elif defined(IRQ_SEL_NOIRQ)
-#define GPIO_SEL_PS
-#define SPI_SEL_PL
-#define I2C_SEL_PL
-#define I2C_TARGET_SEL_PS
-#define TIMER_SELECT		TIMER_SEL_SCU
 #define UART_ASYNC_SEL_PS
-#else /* IRQ_SEL_GIC */
-#define GPIO_SEL_PS
-#define SPI_SEL_PL
-#define I2C_SEL_PL
-#define I2C_TARGET_SEL_PS
-#define TIMER_SELECT		TIMER_SEL_TTC
-#define UART_ASYNC_SEL_PL_NS550
-#endif
 /* #define UART_ASYNC_SEL_PL_LITE */
 
 #define UART_IDENTIFIER		XPAR_XUARTPS_0_BASEADDR
@@ -114,22 +80,25 @@
 #define GPIO_OUTPUT_OPS		&capi_gpio_xilinx_ps_ops
 #define GPIO_OUTPUT_EXTRA	struct capi_gpio_xilinx_ps_config
 #define GPIO_OUTPUT_EXTRA_INIT	\
-	{ .base_pin = 55U }
+	{ .base_pin = 63U }
 
 #define GPIO_INPUT_IDENTIFIER	XPAR_XGPIOPS_0_BASEADDR
 #define GPIO_INPUT_NUM_PINS	1U
 #define GPIO_INPUT_OPS		&capi_gpio_xilinx_ps_ops
 #define GPIO_INPUT_EXTRA	struct capi_gpio_xilinx_ps_config
 #define GPIO_INPUT_EXTRA_INIT	\
-	{ .base_pin = 54U }
+	{ .base_pin = 62U }
 
 #elif defined(GPIO_SEL_PL)
 
 /*
- * PL loopback core is a single dual-channel AXI GPIO: both ports share one
- * base address, distinguished by channel (1 = output, 2 = input).
+ * PL loopback: two separate single-channel AXI GPIO cores (output on GPIO_0,
+ * input on GPIO_1), not a dual-channel IP. The new coraz7s_proj.xsa has
+ * GPIO_0 and GPIO_1 as independent cores (IS_DUAL=0x0), so route output to
+ * the first and input to the second. Both are 32-bit wide; use channel 1
+ * (the only channel on single-channel cores).
  */
-#define GPIO_OUTPUT_IDENTIFIER	XPAR_XGPIO_1_BASEADDR
+#define GPIO_OUTPUT_IDENTIFIER	XPAR_XGPIO_0_BASEADDR
 #define GPIO_OUTPUT_NUM_PINS	1U
 #define GPIO_OUTPUT_OPS		&capi_gpio_xilinx_pl_ops
 #define GPIO_OUTPUT_EXTRA	struct capi_gpio_xilinx_pl_config
@@ -141,7 +110,7 @@
 #define GPIO_INPUT_OPS		&capi_gpio_xilinx_pl_ops
 #define GPIO_INPUT_EXTRA	struct capi_gpio_xilinx_pl_config
 #define GPIO_INPUT_EXTRA_INIT	\
-	{ .channel = 2U }
+	{ .channel = 1U }
 
 #endif /* GPIO_SEL_* */
 
@@ -159,52 +128,31 @@
  * XGpioPs. This is the EMIO line the test samples for its edge interrupt;
  * board-specific, match it to the wired input of the loopback pair.
  */
-#define GPIO_INPUT_PIN		54U
+#define GPIO_INPUT_PIN		62U
 
 /*
- * IRQ controller topology, selected from the BSP. IRQ_CTRL_IDENTIFIER is the
- * root controller capi_irq_init() brings up; the IRQ test and every IRQ-backed
- * async peripheral initialize through it. IRQ_CTRL_EXTRA is config->extra.
+ * Interrupts one low->high pulse on the loopback pin actually raises, which is
+ * a property of the input's detector and so differs per backend:
  *
- *   1. Cascade (GIC + AXI INTC) - GIC root, INTC sub-controller. extra = &cascade
- *   2. PS GIC only              - GIC is root, no PL INTC.        extra = NULL
- *   3. AXI INTC only            - MicroBlaze root, no GIC.        extra = NULL
- *      !! NOT DESIGNED YET, NEEDS SPECIAL MAILBOX INTERMEDIATE
+ *   PS (XGpioPs): armed XGPIOPS_IRQ_TYPE_EDGE_RISING, a real single-edge
+ *     detector -- the falling half of the pulse is ignored. One event.
+ *   PL (AXI GPIO): channel-2 raises ip2intc_irpt on ANY change to the input
+ *     register; the IP has no edge-type control at all. Both halves of the
+ *     pulse are interrupt-worthy. Two events.
  *
- * Note the AXI INTC's presence macro is XPAR_XINTC_NUM_INSTANCES (the canonical
- * XIntc name the SDT BSP emits), NOT XPAR_AXI_INTC_NUM_INSTANCES.
- *
- * When both controllers exist the hardware is a cascade (the AXI INTC's output
- * is a GIC SPI), so cascade is the default. Define IRQ_SEL_GIC before this
- * point to force GIC-only regardless (the INTC is then left unused by the API).
+ * The IRQ suite's exact-count case multiplies its pulse count by this, so a
+ * change-triggered input is not mistaken for duplicate delivery. Cases that
+ * only assert "something arrived" ignore it.
  */
-#if !defined(IRQ_SEL_GIC) && !defined(IRQ_SEL_CASCADE)
-#if defined(XPAR_XSCUGIC_NUM_INSTANCES) && defined(XPAR_XINTC_NUM_INSTANCES)
-#define IRQ_SEL_CASCADE
-#endif
+#if defined(GPIO_SEL_PL)
+#define GPIO_IRQ_EVENTS_PER_EDGE	2U
+#else
+#define GPIO_IRQ_EVENTS_PER_EDGE	1U
 #endif
 
-#if defined(IRQ_SEL_CASCADE)
-/* Cascade: the GIC owns the API as root, the AXI INTC hangs off it. */
-#define IRQ_CTRL_IDENTIFIER	XPAR_XSCUGIC_0_BASEADDR
-#define IRQ_CTRL_EXTRA		(&(struct capi_irq_xilinx_extra) { \
-			.subctrl = &xilinx_capi_irq_intc_subctrl, \
-			.subctrl_ctrl_id = XPAR_AXI_INTC_0_BASEADDR, \
-			.cascade_gic_irq = CAPI_IRQ_XILINX_CASCADE_AUTO })
-#elif defined(XPAR_XSCUGIC_NUM_INSTANCES)
-/* PS GIC only. On Zynq the GIC is always present, so a polled ("noirq") build
- * still lands here; the GPIO-IRQ test skips at runtime when no fabric IRQ is
- * wired (main.c returns -ENOTSUP), not by leaving the root undefined. */
+/* GIC-only IRQ topology */
 #define IRQ_CTRL_IDENTIFIER	XPAR_XSCUGIC_0_BASEADDR
 #define IRQ_CTRL_EXTRA		NULL
-#elif defined(XPAR_XINTC_NUM_INSTANCES)
-/* AXI INTC only (MicroBlaze root). */
-#define IRQ_CTRL_IDENTIFIER	XPAR_AXI_INTC_0_BASEADDR
-#define IRQ_CTRL_EXTRA		NULL
-#else
-/* No interrupt controller in the BSP: leave IRQ_CTRL_IDENTIFIER undefined so
- * the IRQ test and every IRQ-backed async path compile out. */
-#endif
 
 /*
  * Second UART, wired in EXTERNAL loopback (TX strapped to RX on the board) and
@@ -253,29 +201,14 @@
  * so the synthesized value has to be handed over or every rate comes out wrong.
  */
 #define UART_ASYNC_CLK_FREQ_HZ	XPAR_XUARTNS550_0_CLOCK_FREQ
-/*
- * As with the PL SPI/I2C above, an XSA built without fabric interrupts emits no
- * XPAR_XUARTNS550_0_INTERRUPTS, so its presence is what decides whether an IRQ
- * exists. When present, the line goes to the AXI INTC (cascade root) or straight
- * to the GIC, chosen by the IRQ_SEL_CASCADE selection.
- */
 #if defined(XPAR_XUARTNS550_0_INTERRUPTS)
-#if defined(IRQ_SEL_CASCADE)
-/* Cascade root: the fabric line is an AXI INTC input (raw local number). */
-#define UART_ASYNC_IRQ_ID	XPAR_FABRIC_XUARTNS550_0_INTR
-#define UART_ASYNC_EXTRA_INIT	{ .use_irq = true, \
-				  .irq_id = CAPI_IRQ_XILINX_INTC(UART_ASYNC_IRQ_ID) }
-#else
-/* GIC root: resolve the SDT-encoded fabric line to a GIC id. */
 #define UART_ASYNC_IRQ_ID	(XGet_IntrId(XPAR_XUARTNS550_0_INTERRUPTS) + \
 				 XGet_IntrOffset(XPAR_XUARTNS550_0_INTERRUPTS))
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = true, \
 				  .irq_id = CAPI_IRQ_XILINX_GIC(UART_ASYNC_IRQ_ID) }
-#endif
 #else
-/* No fabric interrupt wired (polled build): sync transfers only. */
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = false }
-#endif /* XPAR_XUARTNS550_0_INTERRUPTS */
+#endif
 
 /* The 16550 implements line config, per-source masks, and RX timeout events. */
 #define UART_ASYNC_HAS_LINE_CONFIG	1
@@ -290,22 +223,13 @@
 /* UART Lite's rate is fixed at synthesis; there is no divider to feed. */
 #define UART_ASYNC_CLK_FREQ_HZ	0U
 #if defined(XPAR_XUARTLITE_0_INTERRUPTS)
-#if defined(IRQ_SEL_CASCADE)
-/* Cascade root: the fabric line is an AXI INTC input (raw local number). */
-#define UART_ASYNC_IRQ_ID	XPAR_FABRIC_XUARTLITE_0_INTR
-#define UART_ASYNC_EXTRA_INIT	{ .use_irq = true, \
-				  .irq_id = CAPI_IRQ_XILINX_INTC(UART_ASYNC_IRQ_ID) }
-#else
-/* GIC root: resolve the SDT-encoded fabric line to a GIC id. */
 #define UART_ASYNC_IRQ_ID	(XGet_IntrId(XPAR_XUARTLITE_0_INTERRUPTS) + \
 				 XGet_IntrOffset(XPAR_XUARTLITE_0_INTERRUPTS))
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = true, \
 				  .irq_id = CAPI_IRQ_XILINX_GIC(UART_ASYNC_IRQ_ID) }
-#endif
 #else
-/* No fabric interrupt wired (polled build): sync transfers only. */
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = false }
-#endif /* XPAR_XUARTLITE_0_INTERRUPTS */
+#endif
 
 /*
  * The IP fixes the line format at synthesis (set_line_config is unconditionally
@@ -319,7 +243,15 @@
 
 #elif defined(UART_ASYNC_SEL_PS)
 
-#define UART_ASYNC_IDENTIFIER	XPAR_XUARTPS_0_BASEADDR
+/*
+ * PS UART 1, NOT 0: UART_IDENTIFIER above maps UART 0 as the console, and the
+ * loopback UART must be a different instance (test_uart reprograms the line
+ * rate and strap-loops TX into RX -- doing that to the report transport kills
+ * the log). main.c enforces the distinction with a #error, so mapping instance
+ * 0 here fails the build rather than silently hanging the run. The Zynq PS has
+ * two UARTs and the BSP reports both.
+ */
+#define UART_ASYNC_IDENTIFIER	XPAR_XUARTPS_1_BASEADDR
 #define UART_ASYNC_OPS		&capi_uart_xilinx_ps_ops
 #define UART_ASYNC_EXTRA_TYPE	struct capi_uart_xilinx_config
 /* The PS UART's baud generator is programmed by the driver from the fixed
@@ -329,16 +261,17 @@
  * The PS UART interrupt is a fixed PS SPI line, so it is always a GIC id (never
  * an AXI INTC input) and is present regardless of whether any fabric interrupt
  * was wired. That is what lets the no-IRQ build still run async on it: the PL
- * cores lose their fabric lines, but XPAR_XUARTPS_0_INTERRUPTS stays.
+ * cores lose their fabric lines, but XPAR_XUARTPS_1_INTERRUPTS stays. Note this
+ * tracks instance 1, the loopback UART mapped above -- not the console's 0.
  */
-#if defined(XPAR_XUARTPS_0_INTERRUPTS)
-#define UART_ASYNC_IRQ_ID	(XGet_IntrId(XPAR_XUARTPS_0_INTERRUPTS) + \
-				 XGet_IntrOffset(XPAR_XUARTPS_0_INTERRUPTS))
+#if defined(XPAR_XUARTPS_1_INTERRUPTS)
+#define UART_ASYNC_IRQ_ID	(XGet_IntrId(XPAR_XUARTPS_1_INTERRUPTS) + \
+				 XGet_IntrOffset(XPAR_XUARTPS_1_INTERRUPTS))
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = true, \
 				  .irq_id = CAPI_IRQ_XILINX_GIC(UART_ASYNC_IRQ_ID) }
 #else
 #define UART_ASYNC_EXTRA_INIT	{ .use_irq = false }
-#endif /* XPAR_XUARTPS_0_INTERRUPTS */
+#endif /* XPAR_XUARTPS_1_INTERRUPTS */
 
 /* The PS UART implements line config, per-source masks, and RX timeout events. */
 #define UART_ASYNC_HAS_LINE_CONFIG	1
@@ -357,7 +290,7 @@
  */
 #if (defined(UART_ASYNC_SEL_PL_NS550) && defined(XPAR_XUARTNS550_0_INTERRUPTS)) || \
     (defined(UART_ASYNC_SEL_PL_LITE) && defined(XPAR_XUARTLITE_0_INTERRUPTS)) || \
-    (defined(UART_ASYNC_SEL_PS) && defined(XPAR_XUARTPS_0_INTERRUPTS))
+    (defined(UART_ASYNC_SEL_PS) && defined(XPAR_XUARTPS_1_INTERRUPTS))
 #define UART_ASYNC_HAS_IRQ	1	/* async via interrupt available */
 #else
 #define UART_ASYNC_HAS_IRQ	0
@@ -372,6 +305,15 @@
 #define UART_ASYNC_BAUD_SLOW	9600U
 #define UART_ASYNC_BAUD_FAST	115200U
 #define UART_ASYNC_SPEED_LEN	256U
+
+/*
+ * TX buffer length for the async TX_BUSY case. It must be larger than the
+ * deepest backend TX FIFO so the transfer cannot drain synchronously and drop
+ * straight to done: the PS UART holds 64 bytes, so anything at or below that
+ * completed in the fill and left TX_BUSY nothing to reject against. 128 clears
+ * it with margin on every mapped core.
+ */
+#define UART_ASYNC_LEN		128U
 
 /*
  * SPI backend selection, mirroring the GPIO scheme:
@@ -604,7 +546,25 @@
 #define TIMER_HAS_COMPARE	1
 
 #define TIMER_DIRECTION		CAPI_TIMER_COUNT_UP
-#define TIMER_COUNTER_MAX	0xFFFFFFFFU	/* 32-bit AXI counter */
+/*
+ * Counter span the free-running cases request, NOT the counter's physical
+ * width (that is TIMER_COUNTER_WIDTH below, still a full 32 bits). The driver
+ * turns `max` into an up-counter period by preloading TLR = 2^32 - max, so
+ * this value is what sets the overflow rate -- and ASYNC_IRQ waits only
+ * TIMER_IRQ_TIMEOUT_US (1 s) for one overflow to arrive.
+ *
+ * At the synthesized 100 MHz a full 0xFFFFFFFF span is ~42.9 s per overflow,
+ * so the interrupt cannot possibly land inside that 1 s window and ASYNC_IRQ
+ * fails with zero deliveries. The narrow PS TTC only passes here by accident
+ * of being 16 bits (~1.2 ms per wrap). Ask for 0x01000000 ticks instead:
+ * ~168 ms at 100 MHz, comfortably inside the timeout while still exercising a
+ * genuinely wide 32-bit rollover.
+ *
+ * It also has to stay well ABOVE the ~10 us that TIMER_RATE_WINDOW_US samples
+ * in BASIC, or the counter would wrap inside the rate window and spoil the
+ * tick-delta cross-check. 168 ms clears that by four orders of magnitude.
+ */
+#define TIMER_COUNTER_MAX	0x01000000U	/* ~168 ms at 100 MHz */
 #define TIMER_COUNTER_WIDTH	32U
 #define TIMER_COMPARE_VALUE	0x00010000U
 
@@ -629,8 +589,29 @@
  */
 #define TIMER_IDENTIFIER	XPAR_XSCUTIMER_0_BASEADDR
 #define TIMER_OPS		&capi_timer_xilinx_ps_scu_ops
+/*
+ * The SDT BSP emits no XPAR_XSCUTIMER_0_CLOCK_FREQ (Vitis 2025.x describes the
+ * SCU timer with only base address and interrupt), so derive the rate from the
+ * architectural relationship instead: the A9 private timer is clocked at half
+ * the CPU clock, which the BSP does publish. Prefer a BSP-supplied value if a
+ * future toolchain starts emitting one.
+ */
+#if defined(XPAR_XSCUTIMER_0_CLOCK_FREQ)
 #define TIMER_INPUT_CLK_HZ	XPAR_XSCUTIMER_0_CLOCK_FREQ
-#define TIMER_OUTPUT_FREQ_HZ	1000U
+#else
+#define TIMER_INPUT_CLK_HZ	(XPAR_CPU_CORE_CLOCK_FREQ_HZ / 2U)
+#endif
+/*
+ * Free-run at the source clock, as the TTC block does -- do NOT ask for a
+ * target tick rate here. The SCU prescaler is 8 bits (divide by N+1, N <= 255),
+ * so the ~325 MHz private-timer clock cannot be divided anywhere near 1 kHz:
+ * the driver computes a prescaler of ~325000, clamps it to 255, and silently
+ * runs at ~1.27 MHz instead. Worse, the resulting 788 ns tick is longer than
+ * the gap between two back-to-back counter reads, so BASIC's COUNTER_MOVED
+ * check sees the same value twice and fails. Unprescaled, one tick is ~3 ns
+ * and both reads differ.
+ */
+#define TIMER_OUTPUT_FREQ_HZ	0U
 #define TIMER_EXTRA_TYPE	struct capi_timer_xilinx_config
 #define TIMER_IRQ_ID		CAPI_IRQ_XILINX_GIC(XPS_SCU_TMR_INT_ID)
 #define TIMER_EXTRA_INIT	{ .use_irq = true, \
@@ -640,7 +621,19 @@
 #define TIMER_HAS_COMPARE	1
 
 #define TIMER_DIRECTION		CAPI_TIMER_COUNT_DOWN
-#define TIMER_COUNTER_MAX	0xFFFFFFFFU	/* 32-bit SCU down-counter */
+/*
+ * Counter span the free-running cases request, not the counter's physical
+ * width (that is TIMER_COUNTER_WIDTH below, a full 32 bits). For this
+ * down-counter `max` is the reload value, so it sets the overflow period --
+ * and ASYNC_IRQ waits only TIMER_IRQ_TIMEOUT_US (1 s) for one overflow.
+ *
+ * At the unprescaled ~325 MHz a full 0xFFFFFFFF span is ~13.2 s per overflow,
+ * so the interrupt cannot land inside that window and ASYNC_IRQ sees zero
+ * deliveries. 0x01000000 ticks is ~52 ms: well inside the timeout, and still
+ * far above the ~32.5k ticks TIMER_RATE_WINDOW_US samples in BASIC, so the
+ * counter cannot wrap mid-measurement and spoil the rate cross-check.
+ */
+#define TIMER_COUNTER_MAX	0x01000000U	/* ~52 ms at ~325 MHz */
 #define TIMER_COUNTER_WIDTH	32U
 #define TIMER_COMPARE_VALUE	0x00010000U
 
