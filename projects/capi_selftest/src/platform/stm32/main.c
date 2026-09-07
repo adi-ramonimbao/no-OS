@@ -25,10 +25,21 @@ extern int example_main(void);
  *
  * PC0 is EXTI line 0, so the CAPI IRQ number is EXTI0_IRQn. The test drives a
  * low->high transition, hence a rising-edge trigger.
+ *
+ * On the SDP-CK1Z (STM32F469) the loopback input is PC1 (Arduino A3) on EXTI
+ * line 1.
  */
+#if defined(STM32F469xx)
+#define GPIO_IRQ_PIN		GPIO_PIN_1	/* PC1 -> EXTI line 1 */
+#define GPIO_IRQ_PORT		GPIOC
+#define GPIO_IRQ_IRQN		EXTI1_IRQn
+#define GPIO_IRQ_EXTI_LINE	1U
+#else
 #define GPIO_IRQ_PIN		GPIO_PIN_0	/* PC0 -> EXTI line 0 */
 #define GPIO_IRQ_PORT		GPIOC
 #define GPIO_IRQ_IRQN		EXTI0_IRQn
+#define GPIO_IRQ_EXTI_LINE	0U
+#endif
 
 /**
  * @brief Route the loopback input pin (PC0) to its EXTI line.
@@ -111,10 +122,17 @@ void platform_gpio_irq_disarm(void)
  * registered CAPI callback. (Using HAL_GPIO_EXTI_IRQHandler() here would clear
  * the flag first and defeat that check.)
  */
+#if defined(STM32F469xx)
+void EXTI1_IRQHandler(void)
+{
+	stm32_capi_exti_handler(GPIO_IRQ_EXTI_LINE);
+}
+#else
 void EXTI0_IRQHandler(void)
 {
-	stm32_capi_exti_handler(0U);
+	stm32_capi_exti_handler(GPIO_IRQ_EXTI_LINE);
 }
+#endif
 #endif /* IRQ_CTRL_IDENTIFIER && GPIO_OUTPUT_OPS */
 
 /**

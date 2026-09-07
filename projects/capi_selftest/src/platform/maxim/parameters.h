@@ -118,6 +118,16 @@
 #define DMA_PLATFORM_INIT()
 #define DMA_XFER_SIZE		64U
 
+/*
+ * Select IRQ-driven DMA completion. Like the other MAX32657 drivers, use_irq is
+ * supplied through the controller extra config rather than being derived from an
+ * irq_handle. This is the interim mechanism until a struct capi_irq_handle can
+ * be obtained and passed via config->irq_handle.
+ */
+#define DMA_EXTRA_TYPE		struct max_capi_dma_extra
+#define DMA_EXTRA_INIT		{ .use_irq = true }
+#define DMA_HAS_IRQ		1
+
 /** IRQ */
 #define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
 

@@ -66,6 +66,10 @@ int test_dma(void)
 
 #define DMA_MODULE	"DMA"
 
+/* Bound and granularity for polling a transfer to completion. */
+#define DMA_XFER_TIMEOUT_US	1000000U
+#define DMA_XFER_STEP_US	100U
+
 #ifndef DMA_PLATFORM_INIT
 #define DMA_PLATFORM_INIT()	do { } while (0)
 #endif
@@ -127,7 +131,8 @@ static struct capi_dma_transfer dma_make_xfer(const uint8_t *src,
  *
  * Fills the source with an incrementing pattern, confirms is_completed reads
  * true on a freshly opened channel, goes false once a transfer is configured,
- * and returns to true after the polled start; then checks every byte copied.
+ * and returns to true once the transfer completes; then checks every byte
+ * copied.
  */
 static int dma_basic(void)
 {
@@ -170,6 +175,8 @@ static int dma_basic(void)
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
 
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 	TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 			       "XFER_COMPLETED");
 
@@ -239,6 +246,8 @@ static int dma_pattern(void)
 		ret = capi_dma_xfer_start(chan);
 		TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
 
+		TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+				DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 		TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 				       "XFER_COMPLETED");
 		TEST_ASSERT_EQ_OR_CLEANUP(memcmp(src, dst, DMA_XFER_SIZE), 0,
@@ -316,6 +325,9 @@ static int dma_sizes(void)
 			sizes_ok = false;
 			break;
 		}
+		TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+				DMA_XFER_TIMEOUT_US,
+				DMA_XFER_STEP_US);
 		if (!capi_dma_chan_is_completed(chan)) {
 			fail_stage = "XFER_COMPLETED";
 			fail_len = len;
@@ -387,6 +399,8 @@ static int dma_src_fixed(void)
 
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 	TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 			       "XFER_COMPLETED");
 
@@ -446,6 +460,8 @@ static int dma_dst_fixed(void)
 
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 	TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 			       "XFER_COMPLETED");
 
@@ -525,6 +541,8 @@ static int dma_reuse(void)
 			reuse_ok = false;
 			break;
 		}
+		TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+				DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 		if (!capi_dma_chan_is_completed(chan)) {
 			fail_stage = "XFER_COMPLETED";
 			fail_iter = iter;
@@ -550,11 +568,10 @@ static int dma_reuse(void)
 /**
  * @brief Abort a completed transfer, then prove the channel still works.
  *
- * The polling backend finishes the copy inside xfer_start, so this aborts an
- * already-completed transfer: the abort must return 0 (and leave the channel
- * marked completed), and a following transfer must still copy correctly. This
- * exercises the abort path and channel recovery without needing to catch a
- * transfer mid-flight.
+ * Waits for the transfer to complete, then aborts an already-completed
+ * transfer: the abort must return 0 (and leave the channel marked completed),
+ * and a following transfer must still copy correctly. This exercises the abort
+ * path and channel recovery without needing to catch a transfer mid-flight.
  */
 static int dma_abort(void)
 {
@@ -588,6 +605,8 @@ static int dma_abort(void)
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "CONFIG_XFER");
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 	TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 			       "XFER_COMPLETED");
 
@@ -603,6 +622,8 @@ static int dma_abort(void)
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "RECOVER_CONFIG");
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "RECOVER_START");
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 	TEST_ASSERT_EQ_OR_CLEANUP(memcmp(src, dst, DMA_XFER_SIZE), 0,
 				  "RECOVER_MATCH");
 
@@ -722,7 +743,8 @@ static int dma_async(void)
 	ret = capi_dma_xfer_start(chan);
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "XFER_START");
 
-	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan), 1000000U, 100U);
+	TEST_WAIT_UNTIL(capi_dma_chan_is_completed(chan),
+			DMA_XFER_TIMEOUT_US, DMA_XFER_STEP_US);
 
 	TEST_ASSERT_OR_CLEANUP(capi_dma_chan_is_completed(chan),
 			       "XFER_COMPLETED");

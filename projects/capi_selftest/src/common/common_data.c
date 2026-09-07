@@ -348,6 +348,16 @@ const struct capi_uart_config uart_async_config = {
  */
 DMA_XFER_EXTRA_TYPE dma_xfer_extra = DMA_XFER_EXTRA_INIT;
 
+#ifdef DMA_EXTRA_TYPE
+/**
+ * @brief Platform-specific DMA controller extra config.
+ */
+static DMA_EXTRA_TYPE dma_extra = DMA_EXTRA_INIT;
+#define DMA_EXTRA_PTR	(&dma_extra)
+#else
+#define DMA_EXTRA_PTR	NULL
+#endif
+
 /**
  * @brief CAPI DMA configuration for the memory-to-memory tests.
  */
@@ -356,6 +366,6 @@ const struct capi_dma_config dma_config = {
 	.num_chans = DMA_NUM_CHANS,
 	.ops = DMA_OPS,
 	.irq_handle = NULL,
-	.extra = NULL,
+	.extra = DMA_EXTRA_PTR,
 };
 #endif /* DMA_OPS */
