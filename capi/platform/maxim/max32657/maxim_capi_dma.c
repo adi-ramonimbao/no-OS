@@ -67,6 +67,7 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 	int ret;
 	struct capi_dma_handle *dma_handle;
 	struct max_capi_dma_priv *dma_priv;
+	struct max_capi_dma_extra *extra;
 	uint8_t num_channels = MXC_DMA_CHANNELS;
 
 	if (!handle || !config)
@@ -121,8 +122,10 @@ int max_capi_dma_init(struct capi_dma_handle **handle,
 		goto free_channels;
 	}
 
+	extra = config->extra;
+
 	dma_priv->id = config->id;
-	dma_priv->use_irq = (config->irq_handle != NULL);
+	dma_priv->use_irq = extra ? extra->use_irq : false;
 	dma_handle->ops = config->ops;
 
 	dma = dma_handle;
@@ -185,7 +188,7 @@ int max_capi_dma_deinit(struct capi_dma_handle *handle)
 /**
  * @brief Initialize a DMA channel
  * @param handle The DMA handle
- * @param chan_prt Pointer to a channel
+ * @param chan_ptr Pointer to a channel
  * @param id ID of the DMA channel
  * @return 0 on success, negative error code otherwise
  */
@@ -205,11 +208,9 @@ int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 	if (id >= dma_priv->num_channels)
 		return -EINVAL;
 
-	if (dma_priv->channels[id] != NULL) {
-		/* Channel already initialized */
-		*chan_ptr = dma_priv->channels[id];
-		return 0;
-	}
+	/* Channel already initialized */
+	if (dma_priv->channels[id] != NULL)
+		return -EBUSY;
 
 	if (*chan_ptr == NULL) {
 		chan = capi_calloc(1, sizeof(*chan));
@@ -233,6 +234,7 @@ int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 		goto free_channel;
 	}
 	ch_priv->hw_channel_id = hw_id; /* MSDK-assigned */
+	ch_priv->completed = true; /* An idle channel reports completed */
 	chan->handle = handle;
 	chan->id = id; /* User-assigned */
 	chan->irq_num = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, hw_id);
