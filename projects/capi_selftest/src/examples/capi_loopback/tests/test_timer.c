@@ -252,6 +252,83 @@ static int timer_compare(void)
 }
 
 /**
+ * @brief channel_disable must stop the counter AND leave it restartable.
+ *
+ * Uses the counter as the oracle. counter_config enables channel 0, start runs
+ * it, and back-to-back reads prove it advances. Then channel_disable() is called
+ * and the counter must FREEZE (two reads equal). Finally a plain start() -- with
+ * no re-config or re-enable -- must resume counting (reads advance again).
+ *
+ * The point of the last step: on this platform disable and stop clear different
+ * hardware bits, and start() only re-runs the timer if the clock gate the enable
+ * path set is still in place. If disable tears that gate down, a disabled channel
+ * cannot be restarted by start() alone and RESTART_ADVANCES fails -- which is the
+ * behavior this test exists to catch. DISABLE_FROZEN passing while
+ * RESTART_ADVANCES fails points squarely at disable clearing the wrong bit.
+ *
+ * Reads are taken back-to-back with no framework output between them, matching
+ * timer_basic: a log line can be wider than a counter wrap, so the two samples
+ * are stashed and asserted only afterwards.
+ *
+ * @return 0 on pass, negative error code on failure.
+ */
+static int timer_disable(void)
+{
+	struct capi_timer_handle *timer = NULL;
+	uint32_t first = 0U;
+	uint32_t second = 0U;
+	int get_1_ret, get_2_ret;
+	int ret;
+
+	TEST_SECTION("DISABLE");
+	ret = capi_timer_init(&timer, &timer_config);
+	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "INIT");
+
+	/* Free-running counter; counter_config enables channel 0 under the hood. */
+	struct capi_timer_counter_config counter = {
+		.direction = TIMER_DIRECTION,
+		.min = 0U,
+		.max = TIMER_COUNTER_MAX,
+		.rollover = true,
+		.extra = NULL,
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_counter_config(timer, &counter), 0,
+				  "COUNTER_CONFIG");
+
+	/* Running: the counter must advance. */
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_start(timer), 0, "START");
+	get_1_ret = capi_timer_counter_get(timer, &first);
+	get_2_ret = capi_timer_counter_get(timer, &second);
+	TEST_ASSERT_EQ_OR_CLEANUP(get_1_ret, 0, "RUN_GET_1");
+	TEST_ASSERT_EQ_OR_CLEANUP(get_2_ret, 0, "RUN_GET_2");
+	TEST_ASSERT_COUNTER_DIR_OR_CLEANUP(first, second, TIMER_DIRECTION,
+					   "RUN_ADVANCES");
+
+	/* Disabled: the counter must freeze (two back-to-back reads are equal). */
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_channel_disable(timer, TIMER_CHANNEL),
+				  0, "DISABLE");
+	get_1_ret = capi_timer_counter_get(timer, &first);
+	get_2_ret = capi_timer_counter_get(timer, &second);
+	TEST_ASSERT_EQ_OR_CLEANUP(get_1_ret, 0, "FROZEN_GET_1");
+	TEST_ASSERT_EQ_OR_CLEANUP(get_2_ret, 0, "FROZEN_GET_2");
+	TEST_ASSERT_EQ_OR_CLEANUP(first, second, "DISABLE_FROZEN");
+
+	/* Restartable: a plain start() must resume counting. */
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_start(timer), 0, "RESTART");
+	get_1_ret = capi_timer_counter_get(timer, &first);
+	get_2_ret = capi_timer_counter_get(timer, &second);
+	TEST_ASSERT_EQ_OR_CLEANUP(get_1_ret, 0, "RESTART_GET_1");
+	TEST_ASSERT_EQ_OR_CLEANUP(get_2_ret, 0, "RESTART_GET_2");
+	TEST_ASSERT_COUNTER_DIR_OR_CLEANUP(first, second, TIMER_DIRECTION,
+					   "RESTART_ADVANCES");
+
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_stop(timer), 0, "STOP");
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_timer_deinit(timer), 0, "DEINIT");
+
+	return 0;
+}
+
+/**
  * @brief IRQ-backed counter overflow: register callback, IRQ-driven event.
  *
  * Configures the free-running counter, registers the global event callback,
@@ -415,6 +492,7 @@ static int timer_irq_rate(void)
 static const struct test_case timer_subtests[] = {
 	{ "BASIC",       timer_basic,       false          },
 	{ "COMPARE",     timer_compare,     !TIMER_HAS_COMPARE },
+	{ "DISABLE",     timer_disable,     !TIMER_HAS_COMPARE },
 	{ "ASYNC_IRQ",   timer_async_irq,   !TIMER_HAS_IRQ },
 	{ "IRQ_RATE",    timer_irq_rate,    !TIMER_HAS_IRQ },
 };
@@ -434,8 +512,8 @@ static const struct test_case timer_subtests[] = {
  *   capi_timer_deinit()                deinit
  *   capi_timer_counter_config()        basic
  *   capi_timer_counter_get()           basic
- *   capi_timer_start()/stop()          basic
- *   capi_timer_channel_*()             compare
+ *   capi_timer_start()/stop()          basic, disable
+ *   capi_timer_channel_*()             compare, disable (stop + restart)
  *   capi_timer_event_irq_*()           overflow IRQ
  *   capi_timer_register_event_callback() overflow IRQ
  *   capi_timer_nsec_to_ticks()         basic rate check

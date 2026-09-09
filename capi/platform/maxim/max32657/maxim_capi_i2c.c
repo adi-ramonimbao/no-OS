@@ -592,8 +592,10 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 	ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_WRITE,
 				async->target_addr, 0);
 	if (ret != E_SUCCESS) {
-		if (tx_buffer != async->data_buf)
+		if (tx_buffer != async->data_buf) {
 			capi_free(tx_buffer);
+			i2c_priv->async->dma_allocated_buffer = NULL;
+		}
 		i2c_priv->async_transfer_in_progress = false;
 		return -EIO;
 	}
@@ -642,8 +644,10 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 error_deinit_tx:
 	capi_dma_deinit_chan(i2c_priv->dma_channel_tx);
 error_cleanup:
-	if (tx_buffer != async->data_buf)
+	if (tx_buffer != async->data_buf) {
 		capi_free(tx_buffer);
+		i2c_priv->async->dma_allocated_buffer = NULL;
+	}
 	i2c_priv->async_transfer_in_progress = false;
 
 	return ret;

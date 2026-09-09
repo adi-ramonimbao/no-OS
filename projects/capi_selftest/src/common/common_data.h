@@ -94,8 +94,12 @@ void platform_gpio_irq_disarm(void);
 
 /**
  * @brief CAPI SPI config for external loopback.
+ *
+ * Not const: on a DMA-delivery build the SPI tests initialize the DMA
+ * controller at runtime and assign the resulting handle into .dma_handle
+ * before the controller is opened.
  */
-extern const struct capi_spi_config spi_controller_config;
+extern struct capi_spi_config spi_controller_config;
 /**
  * @brief CAPI SPI device descriptor for the external loopback test.
  */
@@ -276,7 +280,9 @@ extern const struct capi_timer_config timer_config;
 /**
  * @brief CAPI I2C initiator configuration for the loopback tests.
  */
-extern const struct capi_i2c_config i2c_master_config;
+/* Not const: the I2C device tests wire a DMA handle into .dma_handle at runtime
+ * for their DMA pass (I2C DMA is async-only). */
+extern struct capi_i2c_config i2c_master_config;
 /**
  * @brief CAPI I2C device descriptor used by the initiator to address the target.
  */

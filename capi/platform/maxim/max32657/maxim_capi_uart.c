@@ -1019,6 +1019,8 @@ int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
 
 	if (enable)
 		MXC_UART_EnableInt(uart_priv->uart, MXC_F_UART_INTEN_TX_THD);
+	else
+		MXC_UART_DisableInt(uart_priv->uart, MXC_F_UART_INTEN_TX_THD);
 
 	return 0;
 }

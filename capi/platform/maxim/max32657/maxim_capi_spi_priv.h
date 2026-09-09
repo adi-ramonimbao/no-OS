@@ -69,6 +69,8 @@ struct max_capi_spi_priv {
 	struct max_capi_spi_fifo_async fifo_async;
 	/** DMA completion count */
 	volatile uint8_t dma_completed_count;
+	/** DMA channels started for the transfer */
+	volatile uint8_t dma_expected_count;
 	/** RX DMA channel */
 	struct capi_dma_chan *dma_channel_rx;
 	/** TX DMA channel */

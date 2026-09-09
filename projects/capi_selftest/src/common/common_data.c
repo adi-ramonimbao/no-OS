@@ -186,7 +186,7 @@ static SPI_EXTRA_TYPE spi_extra = SPI_EXTRA_INIT;
 /**
  * @brief CAPI configuration for the SPI controller.
  */
-const struct capi_spi_config spi_controller_config = {
+struct capi_spi_config spi_controller_config = {
 	.ops = SPI_OPS,
 	.identifier = SPI_IDENTIFIER,
 	.dma_handle = NULL,
@@ -245,7 +245,7 @@ static I2C_EXTRA_TYPE i2c_extra = I2C_EXTRA_INIT;
 /**
  * @brief CAPI I2C initiator configuration for the loopback tests.
  */
-const struct capi_i2c_config i2c_master_config = {
+struct capi_i2c_config i2c_master_config = {
 	.identifier = I2C_IDENTIFIER,
 	.clk_freq_hz = 0U,
 	.initiator = true,

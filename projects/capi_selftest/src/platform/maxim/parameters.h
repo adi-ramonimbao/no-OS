@@ -49,9 +49,13 @@
 #define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
 #define GPIO_INPUT_PIN_NUMBERS	{ 1 }
 
-/* SPI async delivery mode selection. */
+/*
+ * SPI async delivery modes. Both are enabled on MAX32657: the SPI test runs its
+ * table once per mode (IRQ/FIFO with no DMA handle, then DMA), so both delivery
+ * paths are exercised in a single firmware image.
+ */
 #define SPI_HAS_IRQ	1
-#define SPI_HAS_DMA	0
+#define SPI_HAS_DMA	1
 
 /* IRQ controller - NVIC, no base address needed. */
 #define IRQ_CTRL_IDENTIFIER	0U
@@ -71,7 +75,8 @@
 				  .chip_select = MAX_CAPI_SPI_CS0, \
 				  .clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0, \
 				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, \
-				  .use_irq = true, }
+				  .use_irq = true, \
+				  .dma_config = (struct capi_dma_config *)&dma_config, }
 #define SPI_CLK_FREQ		25000000
 
 #define SPI_DEVICE_NATIVE_CS	MAX_CAPI_SPI_CS0
@@ -103,9 +108,33 @@
 #define I2C_IDENTIFIER		0U
 #define I2C_OPS			&max_capi_i2c_ops
 #define I2C_EXTRA_TYPE		struct max_capi_i2c_extra
-#define I2C_EXTRA_INIT		{ .use_irq = true }
+#define I2C_EXTRA_INIT		{ .use_irq = true, \
+				  .dma_config = (struct capi_dma_config *)&dma_config }
 #define I2C_TARGET_ADDR		0x42
 #define I2C_HAS_IRQ		1
+#define I2C_HAS_DMA		1
+
+/*
+ * On-board ADXL367 accelerometer on I2C0, for controller-mode HW tests
+ * (test_i2c_device). Register access is standard; the 7-bit address depends on
+ * the ASEL strap (0x53 high / 0x1D low), so both are probed.
+ * IDs: DEVID_AD=0xAD, DEVID_MST=0x1D, PARTID=0xF7. TIME_ACT (0x22) is a benign
+ * 8-bit R/W register; SOFT_RESET (0x1F <- 0x52) returns the part to a writable
+ * standby state first.
+ *
+ * Retarget to another device by editing these; see test_i2c_device.c.
+ */
+#define I2C_HAS_DEVICE		1	/* gate: a target is on the bus */
+#define I2C_DEV_ADDR		0x53	/* device 7-bit address (primary) */
+#define I2C_DEV_ADDR_ALT	0x1D	/* alternate address; delete if none */
+#define I2C_DEV_ID_REG		0x00	/* ID / WHO_AM_I register */
+#define I2C_DEV_ID_LEN		3	/* number of ID bytes to check */
+#define I2C_DEV_ID_VALS		{ 0xAD, 0x1D, 0xF7 } /* expected ID values */
+#define I2C_DEV_RW_REG		0x22	/* benign 8-bit R/W register */
+#define I2C_DEV_RW_TESTVAL	0xA5	/* value written then read back */
+#define I2C_DEV_PREP_REG	0x1F	/* optional pre-write (soft reset) */
+#define I2C_DEV_PREP_VAL	0x52	/* value for the prep write */
+#define I2C_DEV_PREP_WAIT_MS	10	/* settle delay after prep, ms */
 
 /**
  * DMA1_S on MAX32657EVKIT:

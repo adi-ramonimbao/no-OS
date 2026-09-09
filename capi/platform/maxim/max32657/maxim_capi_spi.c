@@ -401,7 +401,7 @@ void _max_capi_spi_dma_complete_callback(uint32_t event, void *ctx)
 	struct max_capi_spi_priv *priv = ctx;
 
 	priv->dma_completed_count++;
-	if (priv->dma_completed_count == 2) {
+	if (priv->dma_completed_count >= priv->dma_expected_count) {
 		if (priv->callback) {
 			priv->callback(CAPI_SPI_EVENT_XFR_DONE,
 				       priv->callback_arg, 0);
@@ -434,6 +434,8 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	mxc_spi_regs_t *spi_reg;
 	uint32_t target_speed;
 	uint32_t rx_id, tx_id;
+	uint32_t rx_effective, tx_effective, clk_len;
+	bool rx_active;
 	int timeout;
 
 	spi_handle = device->controller;
@@ -441,6 +443,11 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	spi_reg = MXC_SPI_GET_SPI(spi_priv->identifier);
 	dma_handle = spi_priv->dma_handle;
 	timeout = transfer->timeout;
+
+	if (transfer->tx_buf && transfer->rx_buf &&
+	    transfer->rx_size > transfer->tx_size)
+		return _max_capi_spi_transceive_fifo(device, transfer,
+						     is_async, false);
 
 	if (timeout == 0 || timeout == -1) {
 		while (spi_priv->transfer_in_progress);
@@ -485,9 +492,31 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	/* Assert CS spi_extra->chip_select when the SPI transaction is started */
 	MXC_SPI_SetSlave(spi_reg, (int)target_id);
 
+	rx_effective = transfer->rx_buf ? transfer->rx_size : 0;
+	tx_effective = transfer->tx_buf ? transfer->tx_size : 0;
+	clk_len = (rx_effective > tx_effective) ? rx_effective : tx_effective;
+
+	if (clk_len == 0) {
+		if (is_async && spi_priv->callback) {
+			spi_priv->callback(CAPI_SPI_EVENT_XFR_DONE,
+					   spi_priv->callback_arg, 0);
+		}
+		spi_priv->transfer_in_progress = false;
+
+		return 0;
+	}
+
+	spi_reg->ctrl1 = clk_len;
+	spi_reg->dma |= MXC_F_SPI_DMA_TX_FIFO_EN;
+	if (transfer->rx_buf) {
+		spi_reg->ctrl1 |= (transfer->rx_size << MXC_F_SPI_CTRL1_RX_NUM_CHAR_POS);
+		spi_reg->dma |= MXC_F_SPI_DMA_RX_FIFO_EN;
+	}
+
 	/* Flush the RX and TX FIFOs */
 	MXC_SPI_ClearRXFIFO(spi_reg);
 	MXC_SPI_ClearTXFIFO(spi_reg);
+
 	/* Enable SPI */
 	spi_reg->intfl |= MXC_F_SPI_INTFL_CONT_DONE;
 
@@ -495,11 +524,6 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		spi_reg->ctrl0 &= ~MXC_F_SPI_CTRL0_TS_CTRL;
 	else
 		spi_reg->ctrl0 |= MXC_F_SPI_CTRL0_TS_CTRL;
-
-	/* Enable the TX and RX FIFO */
-	spi_reg->ctrl1 = transfer->tx_size;
-	spi_reg->ctrl1 |= (transfer->rx_size << MXC_F_SPI_CTRL1_RX_NUM_CHAR_POS);
-	spi_reg->dma |= MXC_F_SPI_DMA_TX_FIFO_EN | MXC_F_SPI_DMA_RX_FIFO_EN;
 
 	_max_capi_delay_config(device, transfer);
 
@@ -564,37 +588,63 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 		       .src_inc = transfer->tx_buf ?
 				  CAPI_DMA_BYTE_INCREMENT : CAPI_DMA_NO_INCREMENT,
 				  .dst_inc = CAPI_DMA_NO_INCREMENT,
-				  .length = transfer->tx_size,
+				  /*
+				   * TX clocks the whole transfer. With no tx_buf,
+				   * shift clk_len dummy bytes from zero_tx so an
+				   * RX-only transfer still generates its clocks and
+				   * the TX channel raises a completion. With a
+				   * tx_buf, stay at tx_size to avoid reading past
+				   * it (rx_size > tx_size is handled separately).
+				   */
+				  .length = transfer->tx_buf ?
+					    transfer->tx_size : clk_len,
 				  .extra = &dma_transfer_tx_extra,
 				  .xfer_type = CAPI_DMA_MEM_TO_DEV,
 	};
 
-	spi_priv->dma_completed_count = 0;
+	/*
+	 * The TX channel always runs: it clocks the bus for both directions.
+	 * The RX channel runs only when there are bytes to capture, so a
+	 * write-only transfer completes on the TX channel alone rather than
+	 * waiting on an RX completion that never arrives.
+	 */
+	rx_active = transfer->rx_buf && (transfer->rx_size > 0);
 
-	ret = capi_dma_config_xfer(spi_priv->dma_channel_rx, &dma_transfer_rx);
-	if (ret)
-		goto deinit_tx_chan;
+	spi_priv->dma_completed_count = 0;
+	spi_priv->dma_expected_count = rx_active ? 2 : 1;
+
 	ret = capi_dma_config_xfer(spi_priv->dma_channel_tx, &dma_transfer_tx);
 	if (ret)
 		goto abort_transfer;
+	if (rx_active) {
+		ret = capi_dma_config_xfer(spi_priv->dma_channel_rx,
+					   &dma_transfer_rx);
+		if (ret)
+			goto abort_transfer;
+	}
 
 	if (is_async) {
 		spi_priv->async_transfer_in_progress = true;
-		ret = capi_dma_register_complete_callback(spi_priv->dma_channel_rx,
-				_max_capi_spi_dma_complete_callback,
-				spi_priv);
-		if (ret)
-			goto abort_transfer;
 		ret = capi_dma_register_complete_callback(spi_priv->dma_channel_tx,
 				_max_capi_spi_dma_complete_callback,
 				spi_priv);
 		if (ret)
 			goto abort_transfer;
+		if (rx_active) {
+			ret = capi_dma_register_complete_callback(
+					spi_priv->dma_channel_rx,
+					_max_capi_spi_dma_complete_callback,
+					spi_priv);
+			if (ret)
+				goto abort_transfer;
+		}
 	}
 
-	ret = capi_dma_xfer_start(spi_priv->dma_channel_rx);
-	if (ret)
-		goto abort_transfer;
+	if (rx_active) {
+		ret = capi_dma_xfer_start(spi_priv->dma_channel_rx);
+		if (ret)
+			goto abort_transfer;
+	}
 	ret = capi_dma_xfer_start(spi_priv->dma_channel_tx);
 	if (ret)
 		goto abort_transfer;
@@ -603,8 +653,9 @@ int _max_capi_spi_transceive_dma(struct capi_spi_device *device,
 	MXC_SPI_StartTransmission(spi_reg);
 
 	if (!is_async) {
-		while (!capi_dma_chan_is_completed(spi_priv->dma_channel_rx) ||
-		       !capi_dma_chan_is_completed(spi_priv->dma_channel_tx));
+		while (!capi_dma_chan_is_completed(spi_priv->dma_channel_tx));
+		if (rx_active)
+			while (!capi_dma_chan_is_completed(spi_priv->dma_channel_rx));
 
 		while (spi_reg->status & MXC_F_SPI_STATUS_BUSY);
 		/* End the transaction */
@@ -622,7 +673,6 @@ abort_transfer:
 		spi_priv->async_transfer_in_progress = false;
 	capi_dma_xfer_abort(spi_priv->dma_channel_tx);
 	capi_dma_xfer_abort(spi_priv->dma_channel_rx);
-deinit_tx_chan:
 	capi_dma_deinit_chan(spi_priv->dma_channel_tx);
 	spi_priv->dma_channel_tx = NULL;
 deinit_rx_chan:
