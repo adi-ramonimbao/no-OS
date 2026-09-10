@@ -141,7 +141,7 @@
  */
 #define DMA_OPS			&max_capi_dma_ops
 #define DMA_IDENTIFIER		0U
-#define DMA_NUM_CHANS		1U
+#define DMA_NUM_CHANS		4U
 #define DMA_XFER_EXTRA_TYPE	struct max_capi_dma_xfer_extra
 #define DMA_XFER_EXTRA_INIT	{ .reqsel = MAX_CAPI_DMA_REQUEST_MEMTOMEM }
 #define DMA_PLATFORM_INIT()

@@ -524,10 +524,36 @@ static void _max_capi_i2c_dma_complete_callback(uint32_t event, void *ctx)
 	callback_arg = i2c_priv->callback_arg;
 
 	i2c_priv->dma_completed = true;
-	MXC_I3C_Controller_EnableInt(i3c, MXC_F_I3C_CONT_INTEN_DONE);
+
+	/* Finalize transmit */
+	if (i2c_priv->async->is_transmit) {
+		uint32_t timeout = MAX_CAPI_I2C_DMA_TIMEOUT;
+
+		if (i2c_priv->async->dma_tx_end_pending) {
+			while (!(i3c->cont_status & MXC_F_I3C_CONT_STATUS_TX_NFULL)
+				&& --timeout);
+			/* Write the last byte to the txfifo8e register */
+			i3c->cont_txfifo8e = i2c_priv->async->dma_tx_end_byte;
+			i2c_priv->async->dma_tx_end_pending = false;
+		}
+
+		/* Same DONE poll the MSDK's Controller_Transaction uses. */
+		timeout = MAX_CAPI_I2C_DMA_TIMEOUT;
+		while (!(i3c->cont_status & MXC_F_I3C_CONT_STATUS_DONE)
+			&& --timeout);
+	}
 
 	if (i2c_priv->async->send_stop)
 		MXC_I3C_EmitI2CStop(i3c);
+
+	/*
+	 * Disable the controller RX/TX DMA request. Leaving it enabled lets a
+	 * stale request carry into the next transfer: when the following read
+	 * arms its channel, that pending request fires one phantom transfer off
+	 * the (empty) RX FIFO, shifting the data by one byte and stranding the
+	 * last byte in the FIFO.
+	 */
+	i3c->cont_dmactrl = 0;
 
 	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_rx);
 	_max_capi_i2c_dma_cleanup_channel(&i2c_priv->dma_channel_tx);
@@ -543,7 +569,7 @@ static void _max_capi_i2c_dma_complete_callback(uint32_t event, void *ctx)
 	_max_capi_i2c_reset_async_state(i2c_priv);
 
 	if (callback)
-		callback(event, callback_arg, 0);
+		callback(CAPI_I2C_XFR_DONE, callback_arg, 0);
 
 	i2c_priv->callback_active = false;
 }
@@ -588,6 +614,19 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 	}
 
 	async->state = MAX_CAPI_I2C_ASYNC_STATE_TX_DATA;
+	async->is_transmit = true;
+
+	/*
+	 * An I3C write terminates only when its last byte carries the END
+	 * marker, which the hardware sets when a byte is written to the END FIFO
+	 * register (cont_txfifo8e) rather than the ordinary one (cont_txfifo8o).
+	 */
+	if (tx_len > 1U) {
+		async->dma_tx_end_byte = tx_buffer[tx_len - 1U];
+		async->dma_tx_end_pending = true;
+	} else {
+		async->dma_tx_end_pending = false;
+	}
 
 	ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_WRITE,
 				async->target_addr, 0);
@@ -612,12 +651,14 @@ static int _max_capi_i2c_transmit_dma(struct max_capi_i2c_priv *i2c_priv,
 
 	dma_tx_xfer = (struct capi_dma_transfer) {
 		.src = (capi_dma_glbl_addr_t)tx_buffer,
-		.dst = (capi_dma_glbl_addr_t)&i3c->cont_txfifo8,
+		.dst = async->dma_tx_end_pending ?
+		       (capi_dma_glbl_addr_t)&i3c->cont_txfifo8o :
+		       (capi_dma_glbl_addr_t)&i3c->cont_txfifo8e,
 		.src_inc = CAPI_DMA_BYTE_INCREMENT,
 		.dst_inc = CAPI_DMA_NO_INCREMENT,
 		.src_size = CAPI_DMA_XFER_SIZE_1_BYTE,
 		.dst_size = CAPI_DMA_XFER_SIZE_1_BYTE,
-		.length = tx_len,
+		.length = async->dma_tx_end_pending ? (tx_len - 1U) : tx_len,
 		.extra = &dma_tx_extra,
 		.xfer_type = CAPI_DMA_MEM_TO_DEV,
 		.user_data = i2c_priv,
@@ -696,22 +737,24 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 				return -EIO;
 			}
 		}
-		while (!(MXC_I3C_Controller_GetFlags(i3c) & MXC_F_I3C_CONT_INTFL_DONE)) {
+		/*
+		 * Write completion is signalled in cont_status (CONT_STATUS_DONE),
+		 * which is what the MSDK's own Controller_Transaction polls. The
+		 * cont_intfl DONE flag (MXC_I3C_Controller_GetFlags) is not set on
+		 * this path since the DONE interrupt is never armed here, so polling
+		 * it hangs until timeout.
+		 */
+		while (!(i3c->cont_status & MXC_F_I3C_CONT_STATUS_DONE)) {
 			if (--timeout == 0) {
 				i2c_priv->async_transfer_in_progress = false;
 				return -ETIMEDOUT;
 			}
 		}
-		MXC_I3C_Controller_ClearFlags(i3c, MXC_F_I3C_CONT_INTFL_DONE);
+		MXC_I3C_Controller_ClearFlags(i3c, MXC_F_I3C_CONT_STATUS_DONE);
 	}
 
-	ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_READ,
-				async->target_addr, async->data_len);
-	if (ret != E_SUCCESS) {
-		i2c_priv->async_transfer_in_progress = false;
-		return -EIO;
-	}
-
+	/* Arm the RX DMA channel BEFORE triggering the read. */
+	MXC_I3C_ClearRXFIFO(i3c);
 	i3c->cont_dmactrl = MXC_S_I3C_CONT_DMACTRL_RX_EN_EN;
 
 	ret = capi_dma_init_chan(dma_handle, &i2c_priv->dma_channel_rx, 0);
@@ -751,11 +794,21 @@ static int _max_capi_i2c_receive_dma(struct max_capi_i2c_priv *i2c_priv,
 	if (ret)
 		goto error_deinit_rx;
 
+	/* DMA is armed and waiting; now trigger the read. */
+	ret = MXC_I3C_EmitStart(i3c, true, MXC_I3C_TRANSFER_TYPE_READ,
+				async->target_addr, async->data_len);
+	if (ret != E_SUCCESS) {
+		capi_dma_xfer_abort(i2c_priv->dma_channel_rx);
+		ret = -EIO;
+		goto error_deinit_rx;
+	}
+
 	return 0;
 
 error_deinit_rx:
 	capi_dma_deinit_chan(i2c_priv->dma_channel_rx);
 error_cleanup:
+	i3c->cont_dmactrl = 0;
 	i2c_priv->async_transfer_in_progress = false;
 
 	return ret;
@@ -775,8 +828,13 @@ static void _max_capi_i2c_controller_isr(struct max_capi_i2c_priv *i2c_priv,
 	capi_i2c_callback callback;
 	void *callback_arg;
 
-	if (!i2c_priv->async || i2c_priv->async->state == MAX_CAPI_I2C_ASYNC_STATE_IDLE)
+	if (!i2c_priv->async ||
+	    i2c_priv->async->state == MAX_CAPI_I2C_ASYNC_STATE_IDLE) {
+		/* Disable and clear interrupts so it cannot re-fire. */
+		MXC_I3C_Controller_DisableInt(i3c, 0xFFFFFFFF);
+		MXC_I3C_Controller_ClearFlags(i3c, 0xFFFFFFFF);
 		return;
+	}
 
 	operation_complete = false;
 	flags = MXC_I3C_Controller_GetFlags(i3c);

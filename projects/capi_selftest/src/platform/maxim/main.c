@@ -83,7 +83,7 @@ bool platform_gpio_irq_ack(void)
  */
 int main(void)
 {
-#if SPI_HAS_IRQ || TIMER_HAS_IRQ
+#if SPI_HAS_IRQ || TIMER_HAS_IRQ || I2C_HAS_IRQ
 	if (capi_irq_init(&irq_config) == 0)
 		(void)capi_irq_global_enable();
 #endif

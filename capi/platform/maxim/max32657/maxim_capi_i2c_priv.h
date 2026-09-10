@@ -109,6 +109,11 @@ struct max_capi_i2c_async_state {
 	bool is_transmit;
 	/** DMA allocated buffer storage */
 	uint8_t *dma_allocated_buffer;
+	/** Final TX byte to write to the END FIFO register (DMA transmit) */
+	uint8_t dma_tx_end_byte;
+	/** DMA transmit still owes an END-marked last byte (written in the
+	 *  completion callback once the DMA has queued the rest) */
+	bool dma_tx_end_pending;
 };
 
 /**
