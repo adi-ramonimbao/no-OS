@@ -16,7 +16,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, stm32_capi_i2c, name)
 #else
 #define STM32_I2C_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_I2C_DIRECT_API */
 
 #define MAX_I2C_INSTANCES		4
 #define STM32_I2C_DEFAULT_CLOCK_HZ	100000

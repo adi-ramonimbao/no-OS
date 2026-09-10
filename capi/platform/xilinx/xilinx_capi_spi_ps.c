@@ -31,7 +31,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_spi, capi_spi_ps, name)
 #else
 #define XILINX_SPI_PS_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_SPI_DIRECT_API && CONFIG_CAPI_SPI_XILINX_DIRECT_PS */
 #ifdef XPAR_XSPIPS_NUM_INSTANCES
 
 /* native_cs == 0 selects CS0. */

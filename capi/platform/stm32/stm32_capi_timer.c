@@ -16,7 +16,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_timer, stm32_capi_timer, name)
 #else
 #define STM32_TIMER_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_TIMER_DIRECT_API */
 
 #ifdef HAL_TIM_MODULE_ENABLED
 

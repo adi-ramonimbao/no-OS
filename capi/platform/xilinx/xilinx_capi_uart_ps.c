@@ -30,7 +30,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, capi_uart_ps, name)
 #else
 #define XILINX_UART_PS_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_UART_DIRECT_API && CONFIG_CAPI_UART_XILINX_DIRECT_PS */
 #ifdef XPAR_XUARTPS_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */

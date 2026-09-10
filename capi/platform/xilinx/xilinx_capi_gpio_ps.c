@@ -29,7 +29,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, capi_gpio_xilinx, name)
 #else
 #define XILINX_GPIO_PS_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_GPIO_DIRECT_API && CONFIG_CAPI_GPIO_XILINX_DIRECT_PS */
 #ifdef XPAR_XGPIOPS_NUM_INSTANCES
 
 static int capi_gpio_xilinx_port_init(struct capi_gpio_port_handle **handle,

@@ -56,7 +56,7 @@ static inline bool _max_capi_irq_is_gpio_irq(uint32_t irq)
  * @param config - IRQ configuration struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_init(struct capi_irq_config *config)
+static int max_capi_irq_init(struct capi_irq_config *config)
 {
 	const struct max_capi_irq_extra_config *extra;
 
@@ -83,7 +83,7 @@ int max_capi_irq_init(struct capi_irq_config *config)
  * @brief Deinitialize the IRQ
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_deinit(void)
+static int max_capi_irq_deinit(void)
 {
 	uint32_t i;
 
@@ -108,7 +108,7 @@ int max_capi_irq_deinit(void)
  * @brief Enable the IRQ globally
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_global_enable(void)
+static int max_capi_irq_global_enable(void)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -121,7 +121,7 @@ int max_capi_irq_global_enable(void)
  * @brief Disable the IRQ globally
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_global_disable(void)
+static int max_capi_irq_global_disable(void)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -135,7 +135,7 @@ int max_capi_irq_global_disable(void)
  * @param irq - the IRQ number to enable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_enable(uint32_t irq)
+static int max_capi_irq_enable(uint32_t irq)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -157,7 +157,7 @@ int max_capi_irq_enable(uint32_t irq)
  * @param irq - the IRQ to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_disable(uint32_t irq)
+static int max_capi_irq_disable(uint32_t irq)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -178,7 +178,7 @@ int max_capi_irq_disable(uint32_t irq)
  * @param arg - the arguments to pass to the callback function
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_connect(uint32_t irq, capi_isr_callback_t isr, void *arg)
+static int max_capi_irq_connect(uint32_t irq, capi_isr_callback_t isr, void *arg)
 {
 	int ret;
 
@@ -232,7 +232,7 @@ int max_capi_irq_connect(uint32_t irq, capi_isr_callback_t isr, void *arg)
  * @param irq - the IRQ to clear
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_clear_pending(uint32_t irq)
+static int max_capi_irq_clear_pending(uint32_t irq)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -251,7 +251,7 @@ int max_capi_irq_clear_pending(uint32_t irq)
  * @param pactive - pointer to where the status will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_get_status(uint32_t irq, uint32_t *pactive)
+static int max_capi_irq_get_status(uint32_t irq, uint32_t *pactive)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -270,7 +270,7 @@ int max_capi_irq_get_status(uint32_t irq, uint32_t *pactive)
  * @param priority - the priority
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_set_priority(uint32_t irq, uint32_t priority)
+static int max_capi_irq_set_priority(uint32_t irq, uint32_t priority)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -289,7 +289,7 @@ int max_capi_irq_set_priority(uint32_t irq, uint32_t priority)
  * @param priority - pointer to where the priority will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_get_priority(uint32_t irq, uint32_t *priority)
+static int max_capi_irq_get_priority(uint32_t irq, uint32_t *priority)
 {
 	if (!irq_initialized)
 		return -EINVAL;
@@ -309,7 +309,7 @@ int max_capi_irq_get_priority(uint32_t irq, uint32_t *priority)
  * @param trigger - the level/edge trigger
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_irq_set_level_edge_trigger(uint32_t irq,
+static int max_capi_irq_set_level_edge_trigger(uint32_t irq,
 					enum capi_irq_trig_level trigger)
 {
 	mxc_gpio_cfg_t config;

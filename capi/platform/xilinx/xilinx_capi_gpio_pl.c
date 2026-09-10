@@ -25,7 +25,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, capi_gpio_xilinx, name)
 #else
 #define XILINX_GPIO_PL_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_GPIO_DIRECT_API && CONFIG_CAPI_GPIO_XILINX_DIRECT_PL */
 #ifdef XPAR_XGPIO_NUM_INSTANCES
 /* AXI GPIO exposes one 32-bit data/tristate register per channel. */
 #define CAPI_GPIO_PL_MAX_PINS	32U

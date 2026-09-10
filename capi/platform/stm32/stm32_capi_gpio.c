@@ -16,7 +16,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_gpio, stm32_capi_gpio, name)
 #else
 #define STM32_GPIO_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_GPIO_DIRECT_API */
 
 /** Maximum number of pins per STM32 GPIO port */
 #define STM32_GPIO_PINS_PER_PORT 16

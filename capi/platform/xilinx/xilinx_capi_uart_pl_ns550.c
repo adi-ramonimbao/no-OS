@@ -35,7 +35,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, capi_uart_ns550, name)
 #else
 #define XILINX_UART_PL_NS550_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_UART_DIRECT_API && CONFIG_CAPI_UART_XILINX_DIRECT_PL_NS550 */
 #ifdef XPAR_XUARTNS550_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */

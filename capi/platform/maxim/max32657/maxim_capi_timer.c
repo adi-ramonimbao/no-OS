@@ -22,7 +22,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_timer, max_capi_timer, name)
 #else
 #define MAX_TIMER_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_TIMER_DIRECT_API */
 
 /** Static variables **********************************************************/
 
@@ -30,7 +30,7 @@ static struct capi_timer_handle *timer[MXC_CFG_TMR_INSTANCES] = {NULL};
 
 /** Forward declarations ******************************************************/
 
-void max_capi_timer_isr(void *handle);
+static void max_capi_timer_isr(void *handle);
 
 /** Helper functions **********************************************************/
 
@@ -184,7 +184,7 @@ static int _max_capi_timer_get_clock_frequency(enum max_capi_timer_clock_source
  * @param config The timer config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_init(struct capi_timer_handle **handle,
+static int max_capi_timer_init(struct capi_timer_handle **handle,
 			const struct capi_timer_config *config)
 {
 	int ret;
@@ -311,7 +311,7 @@ MAX_TIMER_DIRECT_ALIAS(init)
  * @param handle The timer handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_deinit(struct capi_timer_handle *handle)
+static int max_capi_timer_deinit(struct capi_timer_handle *handle)
 {
 	struct max_capi_timer_priv *timer_priv;
 	mxc_tmr_regs_t *tmr_reg;
@@ -356,7 +356,7 @@ MAX_TIMER_DIRECT_ALIAS(deinit)
  * @param handle The timer handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_start(struct capi_timer_handle *handle)
+static int max_capi_timer_start(struct capi_timer_handle *handle)
 {
 	struct max_capi_timer_priv *timer_priv;
 
@@ -376,7 +376,7 @@ MAX_TIMER_DIRECT_ALIAS(start)
  * @param handle The timer handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_stop(struct capi_timer_handle *handle)
+static int max_capi_timer_stop(struct capi_timer_handle *handle)
 {
 	struct max_capi_timer_priv *timer_priv;
 
@@ -397,7 +397,7 @@ MAX_TIMER_DIRECT_ALIAS(stop)
  * @param config The timer counter config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_counter_config(struct capi_timer_handle *handle,
+static int max_capi_timer_counter_config(struct capi_timer_handle *handle,
 				  const struct capi_timer_counter_config *config)
 {
 	int ret;
@@ -455,7 +455,7 @@ MAX_TIMER_DIRECT_ALIAS(counter_config)
  * @param counter Pointer to where the value will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_counter_get(struct capi_timer_handle *handle,
+static int max_capi_timer_counter_get(struct capi_timer_handle *handle,
 			       uint32_t *counter)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -477,7 +477,7 @@ MAX_TIMER_DIRECT_ALIAS(counter_get)
  * @param chan The channel (0 = Timer A, 1 = Timer B)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_init(struct capi_timer_handle *handle, uint32_t chan)
+static int max_capi_timer_channel_init(struct capi_timer_handle *handle, uint32_t chan)
 {
 	int ret;
 	struct max_capi_timer_priv *timer_priv;
@@ -539,7 +539,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_init)
  * @param chan The channel (0 = Timer A, 1 = Timer B)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_deinit(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_deinit(struct capi_timer_handle *handle,
 				  uint32_t chan)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -588,7 +588,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_deinit)
  * @param ch_config The configuration for the channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_config(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_config(struct capi_timer_handle *handle,
 				  uint32_t chan,
 				  const struct capi_timer_channel_config *ch_config)
 {
@@ -749,7 +749,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_config)
  * @param chan The channel (0 = Timer A, 1 = Timer B)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_enable(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_enable(struct capi_timer_handle *handle,
 				  uint32_t chan)
 {
 	int ret;
@@ -875,7 +875,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_enable)
  * @param chan The channel (0 = Timer A, 1 = Timer B)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_disable(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_disable(struct capi_timer_handle *handle,
 				   uint32_t chan)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -916,7 +916,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_disable)
  * @param compare The compare value
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_compare_set(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_compare_set(struct capi_timer_handle *handle,
 				       uint32_t chan, uint32_t compare)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -970,7 +970,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_compare_set)
  * @param compare Where to store the compare value
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_compare_get(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_compare_get(struct capi_timer_handle *handle,
 				       uint32_t chan, uint32_t *compare)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1006,7 +1006,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_compare_get)
  * @param capture Where to store the capture value
  * @return -ENOTSUP
  */
-int max_capi_timer_channel_capture_get(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_capture_get(struct capi_timer_handle *handle,
 				       uint32_t chan, uint32_t *capture)
 {
 	return -ENOTSUP;
@@ -1020,7 +1020,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_capture_get)
  * @param ticks Where to store the ticks for given duration_ns
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_nsec_to_ticks(const struct capi_timer_handle *handle,
+static int max_capi_timer_nsec_to_ticks(const struct capi_timer_handle *handle,
 				 uint64_t duration_ns, uint32_t *ticks)
 {
 	const struct max_capi_timer_priv *timer_priv;
@@ -1057,7 +1057,7 @@ MAX_TIMER_DIRECT_ALIAS(nsec_to_ticks)
  * @param duration_ns Where to store the nanoseconds for given number of ticks
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_ticks_to_nsec(const struct capi_timer_handle *handle,
+static int max_capi_timer_ticks_to_nsec(const struct capi_timer_handle *handle,
 				 uint64_t ticks, uint32_t *duration_ns)
 {
 	const struct max_capi_timer_priv *timer_priv;
@@ -1093,7 +1093,7 @@ MAX_TIMER_DIRECT_ALIAS(ticks_to_nsec)
  * @param event The event to enable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_event_irq_enable(struct capi_timer_handle *handle,
+static int max_capi_timer_event_irq_enable(struct capi_timer_handle *handle,
 				    uint32_t event)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1134,7 +1134,7 @@ MAX_TIMER_DIRECT_ALIAS(event_irq_enable)
  * @param event The event to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_event_irq_disable(struct capi_timer_handle *handle,
+static int max_capi_timer_event_irq_disable(struct capi_timer_handle *handle,
 				     uint32_t event)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1183,7 +1183,7 @@ MAX_TIMER_DIRECT_ALIAS(event_irq_disable)
  * @param callback_arg Argument to pass to the callback
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_register_event_callback(struct capi_timer_handle *handle,
+static int max_capi_timer_register_event_callback(struct capi_timer_handle *handle,
 		capi_timer_event_callback callback,
 		void *callback_arg)
 {
@@ -1208,7 +1208,7 @@ MAX_TIMER_DIRECT_ALIAS(register_event_callback)
  * @param event The event to enable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_irq_enable(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_irq_enable(struct capi_timer_handle *handle,
 				      uint32_t chan, uint32_t event)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1264,7 +1264,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_irq_enable)
  * @param event The event to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_irq_disable(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_irq_disable(struct capi_timer_handle *handle,
 				       uint32_t chan, uint32_t event)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1320,7 +1320,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_irq_disable)
  * @param callback_arg Argument to pass to the callback
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_channel_register_callback(struct capi_timer_handle *handle,
+static int max_capi_timer_channel_register_callback(struct capi_timer_handle *handle,
 		uint32_t chan,
 		capi_timer_channel_callback callback,
 		void *callback_arg)
@@ -1356,7 +1356,7 @@ MAX_TIMER_DIRECT_ALIAS(channel_register_callback)
  * @param pending Where to store if pending or not
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_timer_is_irq_pending(struct capi_timer_handle *handle,
+static int max_capi_timer_is_irq_pending(struct capi_timer_handle *handle,
 				  bool *pending)
 {
 	struct max_capi_timer_priv *timer_priv;
@@ -1379,7 +1379,7 @@ MAX_TIMER_DIRECT_ALIAS(is_irq_pending)
  * @brief The ISR for the timer peripheral
  * @param handle The timer handle
  */
-void max_capi_timer_isr(void *handle)
+static void max_capi_timer_isr(void *handle)
 {
 	struct capi_timer_handle *timer_handle = (struct capi_timer_handle *)handle;
 	struct max_capi_timer_priv *timer_priv;

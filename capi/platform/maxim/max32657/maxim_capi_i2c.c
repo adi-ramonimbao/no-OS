@@ -26,7 +26,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_i2c, max_capi_i2c, name)
 #else
 #define MAX_I2C_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_I2C_DIRECT_API */
 
 /** Static variables **********************************************************/
 
@@ -34,8 +34,8 @@ static struct capi_i2c_controller_handle *i2c[MXC_CFG_I3C_INSTANCES] = {NULL};
 
 /** Forward declarations ******************************************************/
 
-void max_capi_i2c_isr(void *handle);
-int max_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle *handle,
+static void max_capi_i2c_isr(void *handle);
+static int max_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle *handle,
 				     enum capi_i2c_speed speed,
 				     uint8_t duty_cycle);
 
@@ -1031,7 +1031,7 @@ int _max_capi_i2c_setup_async(struct capi_i2c_device *device,
  * @param config The I2C initialization config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
+static int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 		      const struct capi_i2c_config *config)
 {
 	int ret;
@@ -1173,7 +1173,7 @@ MAX_I2C_DIRECT_ALIAS(init)
  * @param handle The I2C handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
+static int max_capi_i2c_deinit(struct capi_i2c_controller_handle *handle)
 {
 	int ret;
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1249,7 +1249,7 @@ MAX_I2C_DIRECT_ALIAS(deinit)
  * @param transfer The I2C transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_transmit(struct capi_i2c_device *device,
+static int max_capi_i2c_transmit(struct capi_i2c_device *device,
 			  struct capi_i2c_transfer *transfer)
 {
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1318,7 +1318,7 @@ MAX_I2C_DIRECT_ALIAS(transmit)
  * @param transfer The I2C transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_receive(struct capi_i2c_device *device,
+static int max_capi_i2c_receive(struct capi_i2c_device *device,
 			 struct capi_i2c_transfer *transfer)
 {
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1379,7 +1379,7 @@ MAX_I2C_DIRECT_ALIAS(receive)
  * @param callback_arg Argument for the callback function
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_register_callback(struct capi_i2c_controller_handle *handle,
+static int max_capi_i2c_register_callback(struct capi_i2c_controller_handle *handle,
 				   capi_i2c_callback const callback,
 				   void *const callback_arg)
 {
@@ -1403,7 +1403,7 @@ MAX_I2C_DIRECT_ALIAS(register_callback)
  * @param duty_cycle Ignored - automatically determined by hardware
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle *handle,
+static int max_capi_i2c_configure_bus_speed(struct capi_i2c_controller_handle *handle,
 				     enum capi_i2c_speed speed,
 				     uint8_t duty_cycle)
 {
@@ -1457,7 +1457,7 @@ MAX_I2C_DIRECT_ALIAS(configure_bus_speed)
  * @param transfer The I2C transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_transmit_async(struct capi_i2c_device *device,
+static int max_capi_i2c_transmit_async(struct capi_i2c_device *device,
 				struct capi_i2c_transfer *transfer)
 {
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1501,7 +1501,7 @@ MAX_I2C_DIRECT_ALIAS(transmit_async)
  * @param transfer The I2C transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_receive_async(struct capi_i2c_device *device,
+static int max_capi_i2c_receive_async(struct capi_i2c_device *device,
 			       struct capi_i2c_transfer *transfer)
 {
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1553,7 +1553,7 @@ MAX_I2C_DIRECT_ALIAS(receive_async)
  * @param handle The I2C controller handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_recover_bus(struct capi_i2c_controller_handle *handle)
+static int max_capi_i2c_recover_bus(struct capi_i2c_controller_handle *handle)
 {
 	const struct max_capi_i2c_priv *i2c_priv;
 	uint8_t i2c_id;
@@ -1579,7 +1579,7 @@ MAX_I2C_DIRECT_ALIAS(recover_bus)
  * @param addr Valid 7-bit or 10-bit I2C address
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_register_target(struct capi_i2c_controller_handle *handle,
+static int max_capi_i2c_register_target(struct capi_i2c_controller_handle *handle,
 				 uint16_t addr)
 {
 	struct max_capi_i2c_priv *i2c_priv;
@@ -1640,7 +1640,7 @@ MAX_I2C_DIRECT_ALIAS(register_target)
  * @param handle The I2C controller handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_i2c_unregister_target(struct capi_i2c_controller_handle *handle)
+static int max_capi_i2c_unregister_target(struct capi_i2c_controller_handle *handle)
 {
 	struct max_capi_i2c_priv *i2c_priv;
 	mxc_i3c_regs_t *i3c;
@@ -1679,7 +1679,7 @@ MAX_I2C_DIRECT_ALIAS(unregister_target)
  * @brief The function called during an interrupt
  * @param handle The I2C handle
  */
-void max_capi_i2c_isr(void *handle)
+static void max_capi_i2c_isr(void *handle)
 {
 	struct capi_i2c_controller_handle *i2c_handle;
 	struct max_capi_i2c_priv *i2c_priv;

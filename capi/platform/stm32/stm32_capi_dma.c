@@ -16,7 +16,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_dma, stm32_capi_dma, name)
 #else
 #define STM32_DMA_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_DMA_DIRECT_API */
 
 #define MAX_DMA_CHANNELS 16
 

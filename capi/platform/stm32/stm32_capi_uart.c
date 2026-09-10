@@ -17,7 +17,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_uart, stm32_capi_uart, name)
 #else
 #define STM32_UART_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_UART_DIRECT_API */
 
 /** Maximum number of UART instances tracked for HAL callback routing.
  * 12 covers all known STM32 families (up to 10 on H7/H5, plus headroom). */

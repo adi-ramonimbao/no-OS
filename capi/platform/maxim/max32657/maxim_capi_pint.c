@@ -24,7 +24,7 @@
 	ADD_OPTIONAL_CAPI_DIRECT_ALIAS(capi_pint, max_capi_pint, name)
 #else
 #define MAX_PINT_DIRECT_ALIAS(name)
-#endif
+#endif /* CONFIG_CAPI_PINT_DIRECT_API */
 
 /** Static variables **********************************************************/
 
