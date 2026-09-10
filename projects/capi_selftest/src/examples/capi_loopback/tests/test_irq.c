@@ -64,6 +64,15 @@
 #define IRQ_ARG_TOKEN	0xA5A5u
 
 /*
+ * The subtests raise real GPIO interrupts by driving the loopback output and
+ * observing the edge arrive on the loopback input. Without a GPIO loopback
+ * pair (neither port nor pin), there is no way to generate that edge, so the
+ * body compiles out. A platform that has an IRQ controller but no GPIO
+ * loopback will still link against the stub below.
+ */
+#if GPIO_HAS_PORT_LOOPBACK || GPIO_HAS_PIN_LOOPBACK
+
+/*
  * ISR <-> test shared state. volatile: the ISR writes asynchronously while the
  * test body polls. Grouped in one struct so a callback can be handed a pointer
  * to it as its CAPI argument.
@@ -160,14 +169,27 @@ static void fx_teardown(uint32_t irq_line)
 }
 
 /* Drive a low->high edge on the loopback output through CAPI GPIO. */
+#if GPIO_HAS_PIN_LOOPBACK
 static int fx_raise_edge(void)
 {
+	uint64_t out_bit = 1ULL << gpio_output_pin_numbers[0];
+	int ret = capi_gpio_port_set_raw_value(fx_out, 0U);
+
+	if (ret != 0)
+		return ret;
+	return capi_gpio_port_set_raw_value(fx_out, out_bit);
+}
+#else /* GPIO_HAS_PORT_LOOPBACK */
+static int fx_raise_edge(void)
+{
+	/* No pin numbers defined; IRQ input is assumed to be on bit 0. */
 	int ret = capi_gpio_port_set_raw_value(fx_out, 0U);
 
 	if (ret != 0)
 		return ret;
 	return capi_gpio_port_set_raw_value(fx_out, 1ULL);
 }
+#endif /* GPIO_HAS_PIN_LOOPBACK */
 
 /*
  * Every case here brings a live interrupt up: it inits the controller, opens
@@ -422,6 +444,16 @@ int test_irq(void)
 	return test_framework_run_cases(IRQ_MODULE, irq_subtests,
 					sizeof(irq_subtests) / sizeof(irq_subtests[0]));
 }
+
+#else /* GPIO_HAS_PORT_LOOPBACK || GPIO_HAS_PIN_LOOPBACK */
+
+/* No GPIO loopback wired: cannot raise real interrupts; suite compiles out. */
+int test_irq(void)
+{
+	return 0;
+}
+
+#endif /* GPIO_HAS_PORT_LOOPBACK || GPIO_HAS_PIN_LOOPBACK */
 
 #else /* IRQ_CTRL_IDENTIFIER */
 

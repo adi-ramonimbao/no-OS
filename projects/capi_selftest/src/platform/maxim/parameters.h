@@ -27,27 +27,28 @@
 
 /**
  * GPIO loopback pair on MAX32657EVKIT:
- * 	P0.0 (output) wired to P0.1 (input)
+ * 	P0.7 (output) wired to P0.8 (input)
+ * Requires the on-board MAX30123 jumpers on P0.7/P0.8 to be removed.
  */
 #define GPIO_OUTPUT_IDENTIFIER	0U
-#define GPIO_OUTPUT_NUM_PINS	2U
+#define GPIO_OUTPUT_NUM_PINS	9U
 #define GPIO_OUTPUT_OPS		&max_capi_gpio_ops
-#define GPIO_OUTPUT_NAME	"P0.0"
+#define GPIO_OUTPUT_NAME	"P0.7"
 #define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
 #define GPIO_OUTPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_OUT }
 
 #define GPIO_INPUT_IDENTIFIER	0U
-#define GPIO_INPUT_NUM_PINS	2U
+#define GPIO_INPUT_NUM_PINS	9U
 #define GPIO_INPUT_OPS		&max_capi_gpio_ops
-#define GPIO_INPUT_NAME		"P0.1"
+#define GPIO_INPUT_NAME		"P0.8"
 #define GPIO_INPUT_EXTRA	struct max_capi_gpio_extra_config
 #define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN }
 
 #define GPIO_HAS_PORT_LOOPBACK	0
 #define GPIO_HAS_PIN_LOOPBACK	1
 
-#define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
-#define GPIO_INPUT_PIN_NUMBERS	{ 1 }
+#define GPIO_OUTPUT_PIN_NUMBERS	{ 7 }
+#define GPIO_INPUT_PIN_NUMBERS	{ 8 }
 
 /*
  * SPI async delivery modes. Both are enabled on MAX32657: the SPI test runs its
