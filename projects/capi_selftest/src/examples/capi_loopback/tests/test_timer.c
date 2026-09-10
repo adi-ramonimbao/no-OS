@@ -17,6 +17,20 @@
 #include "test_framework.h"
 #include "test_timer.h"
 
+#ifndef TIMER_OPS
+
+/* No timer backend mapped on this platform: the suite compiles out to a skip. */
+int test_timer(void)
+{
+	static const struct test_case stub[] = {
+		{ "NOT_CONFIGURED", NULL, false },
+	};
+
+	return test_framework_run_cases("TIMER", stub, 1U);
+}
+
+#else /* TIMER_OPS defined — full implementation follows */
+
 #define TIMER_MODULE		"TIMER"
 #define TIMER_IRQ_TIMEOUT_US	1000000U
 #define TIMER_IRQ_STEP_US	1000U
@@ -528,3 +542,5 @@ int test_timer(void)
 	return test_framework_run_cases(TIMER_MODULE, timer_subtests,
 					sizeof(timer_subtests) / sizeof(timer_subtests[0]));
 }
+
+#endif /* TIMER_OPS */

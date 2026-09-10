@@ -13,6 +13,20 @@
 #include "test_framework.h"
 #include "test_gpio.h"
 
+#ifndef GPIO_OUTPUT_OPS
+
+/* No GPIO backend mapped on this platform: the suite compiles out to a skip. */
+int test_gpio(void)
+{
+	static const struct test_case stub[] = {
+		{ "NOT_CONFIGURED", NULL, false },
+	};
+
+	return test_framework_run_cases("GPIO", stub, 1U);
+}
+
+#else /* GPIO_OUTPUT_OPS defined — full implementation follows */
+
 #define GPIO_MODULE	"GPIO"
 
 /**
@@ -418,3 +432,5 @@ int test_gpio(void)
 	return test_framework_run_cases(GPIO_MODULE, gpio_subtests,
 					sizeof(gpio_subtests) / sizeof(gpio_subtests[0]));
 }
+
+#endif /* GPIO_OUTPUT_OPS */

@@ -17,6 +17,20 @@
 #include "test_framework.h"
 #include "test_spi.h"
 
+#ifndef SPI_OPS
+
+/* No SPI backend mapped on this platform: the suite compiles out to a skip. */
+int test_spi(void)
+{
+	static const struct test_case stub[] = {
+		{ "NOT_CONFIGURED", NULL, false },
+	};
+
+	return test_framework_run_cases("SPI", stub, 1U);
+}
+
+#else /* SPI_OPS defined — full implementation follows */
+
 #define SPI_MODULE		"SPI"
 #define SPI_ASYNC_TIMEOUT_US	1000000U
 #define SPI_ASYNC_STEP_US	1000U
@@ -881,3 +895,5 @@ int test_spi(void)
 
 	return first_error;
 }
+
+#endif /* SPI_OPS */

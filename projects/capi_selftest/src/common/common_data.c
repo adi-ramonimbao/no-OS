@@ -12,6 +12,15 @@
 #include "parameters.h"
 #include "test_framework.h"
 
+/*
+ * Root IRQ controller extra config. A platform whose controller needs no extra
+ * data (the NVIC on STM32, or the GIC-only Xilinx build) can leave this
+ * undefined; default it to NULL so irq_config still compiles everywhere.
+ */
+#ifndef IRQ_CTRL_EXTRA
+#define IRQ_CTRL_EXTRA NULL
+#endif
+
 /**
 * @brief Wait callback for the test framework; delays the specified microseconds.
 * @param context - Unused.
@@ -74,13 +83,22 @@ static struct capi_uart_line_config uart_line_config = {
  */
 static UART_EXTRA_TYPE uart_extra = UART_EXTRA_INIT;
 
+/*
+ * Console clock select. A platform's parameters.h may pin this (e.g. the Maxim
+ * MAX32690 boards clock the console from IBRO); default 0 lets the backend pick
+ * its own clock (APB on Maxim), which is what every other platform expects.
+ */
+#ifndef UART_CLK_FREQ_HZ
+#define UART_CLK_FREQ_HZ 0U
+#endif
+
 /**
  * @brief CAPI UART configuration used as the test report transport.
  */
 const struct capi_uart_config uart_config = {
 	.identifier = UART_IDENTIFIER,
 	.dma_handle = NULL,
-	.clk_freq_hz = 0U,
+	.clk_freq_hz = UART_CLK_FREQ_HZ,
 	.line_config = &uart_line_config,
 	.extra = &uart_extra,
 	.ops = UART_OPS,

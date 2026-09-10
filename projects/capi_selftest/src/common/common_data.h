@@ -86,6 +86,16 @@ bool platform_gpio_irq_ack(void);
  * @brief Mask the loopback input pin's interrupt again.
  */
 void platform_gpio_irq_disarm(void);
+
+/*
+ * Interrupts one low->high pulse on the loopback pin raises. A platform whose
+ * input is a true single-edge detector leaves this alone; one whose input is
+ * change-triggered (interrupting on both halves of the pulse) publishes 2 from
+ * its parameters.h. The IRQ suite's exact-count case scales by it.
+ */
+#ifndef GPIO_IRQ_EVENTS_PER_EDGE
+#define GPIO_IRQ_EVENTS_PER_EDGE	1U
+#endif /* GPIO_IRQ_EVENTS_PER_EDGE */
 #endif /* GPIO_OUTPUT_OPS */
 
 #ifdef SPI_OPS
@@ -345,6 +355,16 @@ extern struct capi_i2c_device i2c_target_dev;
 #ifndef UART_ASYNC_SPEED_LEN
 #define UART_ASYNC_SPEED_LEN	256U
 #endif /* UART_ASYNC_SPEED_LEN */
+
+/*
+ * TX buffer length for the TX_BUSY case. It must exceed the deepest backend TX
+ * FIFO or the transfer drains during the fill and drops straight to done,
+ * leaving TX_BUSY nothing to reject against. A platform whose FIFO is deeper
+ * than this raises it in parameters.h.
+ */
+#ifndef UART_ASYNC_LEN
+#define UART_ASYNC_LEN		128U
+#endif /* UART_ASYNC_LEN */
 
 /*
  * Floor (microseconds) below which a measured transfer time is dominated by the

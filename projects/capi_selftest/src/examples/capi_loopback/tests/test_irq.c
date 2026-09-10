@@ -38,12 +38,14 @@
 #include "common_data.h"
 
 /*
- * The whole suite needs a root IRQ controller to bring up. Platforms whose BSP
- * maps no interrupt controller leave IRQ_CTRL_IDENTIFIER undefined; there the
- * file compiles out to a skipping stub (mirrors how test_gpio stays inert until
- * GPIO is mapped), so capi_loopback still links.
+ * The suite needs BOTH a root IRQ controller to bring up AND a CAPI GPIO
+ * backend: every case raises a real interrupt by driving a loopback GPIO pin
+ * (via gpio_output_config and the platform_gpio_irq_* hooks, all gated on
+ * GPIO_OUTPUT_OPS). A platform missing either leaves the respective macro
+ * undefined; there the file compiles out to a skipping stub so capi_loopback
+ * still links.
  */
-#ifdef IRQ_CTRL_IDENTIFIER
+#if defined(IRQ_CTRL_IDENTIFIER) && defined(GPIO_OUTPUT_OPS)
 
 #define IRQ_MODULE	"IRQ"
 
@@ -137,6 +139,18 @@ static int fx_setup(uint32_t *irq_line)
 		return ret;
 
 	/*
+	 * The global_disable above only brackets the controller deinit/init so no
+	 * line fires mid-reconfigure -- re-enable now that the controller is back
+	 * up. Without this, a board whose GPIO-IRQ path is absent (platform_gpio_
+	 * irq_arm() -> -ENOTSUP, below) SKIPs before the per-case GLOBAL_ENABLE
+	 * runs, so PRIMASK stays set for the entire rest of the run and silently
+	 * masks every later interrupt-driven suite -- UART async TX_DONE/SLOW_XFER
+	 * and DMA completion all fail with the IRQ asserted+pending but never taken.
+	 * HW-confirmed root cause 2026-08-26 (DMA VALs: primask=1, nvic_pend=1).
+	 */
+	(void)capi_irq_global_enable();
+
+	/*
 	 * Open the CAPI GPIO output port FIRST, then arm the input interrupt.
 	 * Order matters: opening a CAPI GPIO port re-initializes the underlying
 	 * GPIO controller, which masks all of that controller's pin interrupts.
@@ -168,28 +182,48 @@ static void fx_teardown(uint32_t irq_line)
 	}
 }
 
-/* Drive a low->high edge on the loopback output through CAPI GPIO. */
+/*
+ * Bit the loopback output pin occupies in its CAPI port. capi_gpio_port_set_raw_
+ * value() takes a bitmask keyed by pin number -- bit N drives pin N (see
+ * capi_gpio.h) -- so a literal 1 only pulses the pin wired at bit 0. Where the
+ * strap output sits on a higher pin (MAX32690/APARD: P1.29 = bit 29) that literal
+ * never toggles it: every write still returns 0, but no edge -- and so no
+ * interrupt -- ever reaches the input, which reads as count=0 with no hang.
+ * Derive the real bit from the loopback pin map so the pulse lands on the
+ * strapped pin on every board; a port-loopback-only board (no pin map, strap at
+ * bit 0, e.g. STM32 where this evaluates to 1) keeps today's behaviour exactly.
+ */
 #if GPIO_HAS_PIN_LOOPBACK
+#define IRQ_EDGE_OUT_BIT	(1ULL << gpio_output_pin_numbers[0])
+#else
+#define IRQ_EDGE_OUT_BIT	1ULL
+#endif
+
+/*
+ * Drive one low->high->low pulse on the loopback output through CAPI GPIO.
+ *
+ * The pin is returned to the idle low level rather than left high so that every
+ * pulse costs the SAME number of input transitions no matter how many have run
+ * before it: the leading set(0) is always a no-op, the rise and the fall are
+ * always one change each. Leaving the pin high instead made the first pulse
+ * (from the low state fx_setup leaves behind) one transition cheaper than the
+ * rest, so a change-triggered input saw 2N-1 events for N pulses -- an awkward
+ * count that reads exactly like duplicate delivery.
+ *
+ * A rising-edge input still sees precisely one interrupt per call; a
+ * change-triggered one sees two. That ratio is GPIO_IRQ_EVENTS_PER_EDGE.
+ */
 static int fx_raise_edge(void)
 {
-	uint64_t out_bit = 1ULL << gpio_output_pin_numbers[0];
 	int ret = capi_gpio_port_set_raw_value(fx_out, 0U);
 
 	if (ret != 0)
 		return ret;
-	return capi_gpio_port_set_raw_value(fx_out, out_bit);
-}
-#else /* GPIO_HAS_PORT_LOOPBACK */
-static int fx_raise_edge(void)
-{
-	/* No pin numbers defined; IRQ input is assumed to be on bit 0. */
-	int ret = capi_gpio_port_set_raw_value(fx_out, 0U);
-
+	ret = capi_gpio_port_set_raw_value(fx_out, IRQ_EDGE_OUT_BIT);
 	if (ret != 0)
 		return ret;
-	return capi_gpio_port_set_raw_value(fx_out, 1ULL);
+	return capi_gpio_port_set_raw_value(fx_out, 0U);
 }
-#endif /* GPIO_HAS_PIN_LOOPBACK */
 
 /*
  * Every case here brings a live interrupt up: it inits the controller, opens
@@ -413,18 +447,26 @@ static int irq_repeated_edges(void)
 	ret = capi_irq_global_enable();
 	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "GLOBAL_ENABLE");
 
+	/*
+	 * Interrupts one pulse raises on this board's input detector: 1 on a
+	 * rising-edge input, 2 on a change-triggered one that also fires on the
+	 * falling half. Wait for the full quota each iteration, or the loop would
+	 * race ahead on the first delivery and leave the rest arriving during the
+	 * next pulse.
+	 */
+	const uint32_t per_edge = GPIO_IRQ_EVENTS_PER_EDGE;
+
 	for (uint32_t i = 0U; i < edges; i++) {
 		uint32_t before = probe.count;
 
 		ret = fx_raise_edge();
 		TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "DRIVE_EDGE");
-		TEST_WAIT_UNTIL(probe.count > before, IRQ_WAIT_US, IRQ_STEP_US);
+		TEST_WAIT_UNTIL(probe.count >= before + per_edge, IRQ_WAIT_US,
+				IRQ_STEP_US);
 	}
 
 	TEST_BEGIN(IRQ_MODULE, "REPEATED_EDGES");
-	TEST_VALUE("edges", edges);
-	TEST_VALUE("delivered", probe.count);
-	TEST_ASSERT_EQ_OR_CLEANUP(probe.count, edges, "ALL_DELIVERED");
+	TEST_ASSERT_EQ_OR_CLEANUP(probe.count, edges * per_edge, "ALL_DELIVERED");
 
 	fx_teardown(irq_line);
 	return 0;
@@ -455,12 +497,16 @@ int test_irq(void)
 
 #endif /* GPIO_HAS_PORT_LOOPBACK || GPIO_HAS_PIN_LOOPBACK */
 
-#else /* IRQ_CTRL_IDENTIFIER */
+#else /* IRQ_CTRL_IDENTIFIER && GPIO_OUTPUT_OPS */
 
-/* No IRQ controller mapped on this platform: the suite compiles out. */
+/* No IRQ controller or no GPIO backend: the suite compiles out to a skip. */
 int test_irq(void)
 {
-	return 0;
+	static const struct test_case stub[] = {
+		{ "NOT_CONFIGURED", NULL, false },
+	};
+
+	return test_framework_run_cases("IRQ", stub, 1U);
 }
 
-#endif /* IRQ_CTRL_IDENTIFIER */
+#endif /* IRQ_CTRL_IDENTIFIER && GPIO_OUTPUT_OPS */
