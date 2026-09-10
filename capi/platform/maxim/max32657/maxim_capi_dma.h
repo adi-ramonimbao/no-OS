@@ -51,6 +51,15 @@ struct max_capi_dma_xfer_extra {
 	enum max_capi_dma_request reqsel;
 };
 
+/**
+ * @struct max_capi_dma_extra
+ * @brief MAX32657 platform-specific DMA controller configuration
+ */
+struct max_capi_dma_extra {
+	/** Deliver transfer completion through a per-channel IRQ when true */
+	bool use_irq;
+};
+
 extern const struct capi_dma_ops max_capi_dma_ops;
 
 #if defined(__cplusplus)

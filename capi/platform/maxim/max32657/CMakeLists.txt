@@ -5,7 +5,6 @@
 no_os_sources_ifdef(CONFIG_CAPI       ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_init.c)
 
 no_os_sources_ifdef(CONFIG_CAPI_UART  ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_uart.c)
-no_os_sources_ifdef(CONFIG_CAPI_ALLOC ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_alloc.c)
 no_os_sources_ifdef(CONFIG_CAPI_TIME  ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_time.c)
 no_os_sources_ifdef(CONFIG_CAPI_GPIO  ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_gpio.c)
 no_os_sources_ifdef(CONFIG_CAPI_IRQ   ${CMAKE_CURRENT_SOURCE_DIR}/maxim_capi_irq.c)

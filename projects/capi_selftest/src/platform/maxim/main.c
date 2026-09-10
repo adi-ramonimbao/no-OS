@@ -22,9 +22,14 @@ extern int example_main(void);
  */
 int platform_gpio_irq_arm(uint32_t *irq_line)
 {
+	/*
+	 * Derive the interrupt pin from the loopback input pin in parameters.h
+	 * (GPIO_INPUT_PIN_NUMBERS) instead of hardcoding it, so moving the
+	 * loopback pair does not require editing this hook.
+	 */
 	mxc_gpio_cfg_t gpio_irq = {
 		.port = MXC_GPIO0,
-		.mask = MXC_GPIO_PIN_1,  /* P0.1 - input pin from parameters.h */
+		.mask = (1U << gpio_input_pin_numbers[0]),
 		.func = MXC_GPIO_FUNC_IN,
 		.pad = MXC_GPIO_PAD_NONE,
 		.vssel = MXC_GPIO_VSSEL_VDDIO,
@@ -53,8 +58,8 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
  */
 void platform_gpio_irq_disarm(void)
 {
-	/* Disable interrupt on P0.1 */
-	MXC_GPIO_DisableInt(MXC_GPIO0, MXC_GPIO_PIN_1);
+	/* Disable interrupt on the loopback input pin (from parameters.h). */
+	MXC_GPIO_DisableInt(MXC_GPIO0, (1U << gpio_input_pin_numbers[0]));
 }
 
 /**
@@ -62,18 +67,22 @@ void platform_gpio_irq_disarm(void)
  * @return true if the input pin was the source and was cleared.
  *
  * Note: By the time this is called from the IRQ callback, MXC_GPIO_Handler()
- * has already cleared the interrupt flags. Since P0.1 is the only pin configured
- * with an interrupt in this test, we can safely assume it was the source if
- * the GPIO0 IRQ fired.
+ * has already cleared the interrupt flags. Since the loopback input pin is the
+ * only pin configured with an interrupt in this test, we can safely assume it
+ * was the source if the GPIO0 IRQ fired.
  */
 bool platform_gpio_irq_ack(void)
 {
 	/*
-	 * Always return true because:
-	 * 1. P0.1 is the only pin with interrupt enabled in this test
-	 * 2. MXC_GPIO_Handler() already cleared the flags before this is called
-	 * 3. If GPIO0_IRQn fired, it must have been P0.1
+	 * Clear the input pin's interrupt flag explicitly. GPIO0_IRQHandler
+	 * clears all latched flags after calling this from ISR context, but this
+	 * function is also called from test-body context (to swallow stale
+	 * latched edges before re-enabling the NVIC line). In that context no ISR
+	 * has run, so the flag is still set; not clearing it causes the NVIC to
+	 * fire immediately on NVIC_EnableIRQ, looping the CPU in the ISR.
+	 * Clearing an already-cleared flag is harmless.
 	 */
+	MXC_GPIO_ClearFlags(MXC_GPIO0, (1U << gpio_input_pin_numbers[0]));
 	return true;
 }
 
@@ -83,7 +92,7 @@ bool platform_gpio_irq_ack(void)
  */
 int main(void)
 {
-#if SPI_HAS_IRQ || TIMER_HAS_IRQ
+#if SPI_HAS_IRQ || TIMER_HAS_IRQ || I2C_HAS_IRQ
 	if (capi_irq_init(&irq_config) == 0)
 		(void)capi_irq_global_enable();
 #endif

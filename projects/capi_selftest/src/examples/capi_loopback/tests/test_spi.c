@@ -11,6 +11,7 @@
 #include <string.h>
 #include "capi_irq.h"
 #include "capi_spi.h"
+#include "capi_dma.h"
 #include "parameters.h"
 #include "common_data.h"
 #include "test_framework.h"
@@ -35,6 +36,8 @@ int test_spi(void)
 #define SPI_ASYNC_STEP_US	1000U
 #define SPI_ABORT_SIZE		128U
 
+/* Async completion state and buffers: only the IRQ and DMA cases use these. */
+#if SPI_HAS_IRQ || SPI_HAS_DMA
 static volatile unsigned int spi_callback_count;
 static volatile enum capi_async_event spi_callback_event;
 static volatile int spi_callback_extra;
@@ -50,6 +53,7 @@ static void spi_test_callback(enum capi_async_event event, void *arg,
 	spi_callback_extra = event_extra;
 	spi_callback_count++;
 }
+#endif /* SPI_HAS_IRQ || SPI_HAS_DMA */
 
 /**
  * @brief Basic CAPI SPI contract: init, deinit, full-duplex and complex transfers.
@@ -188,6 +192,7 @@ static int spi_basic(void)
 			(void)capi_spi_deinit(spi_handle); \
 	} while (0)
 
+#if SPI_HAS_IRQ
 /**
  * @brief IRQ-backed async transfers: register callback, IRQ-driven completion.
  *
@@ -335,7 +340,9 @@ static int spi_manual_isr(void)
 
 	return 0;
 }
+#endif /* SPI_HAS_IRQ */
 
+#if SPI_HAS_DMA
 /**
  * @brief DMA-backed async transfers: async completion via DMA delivery.
  *
@@ -388,6 +395,164 @@ static int spi_async_dma(void)
 	return 0;
 }
 
+/**
+ * @brief Start one async transfer and wait for its completion callback.
+ *
+ * Resets the shared callback state, starts the async transfer, and busy-waits
+ * until the callback fires or the timeout elapses. Returns the start error (if
+ * any); the caller asserts the resulting callback count/event and any received
+ * data. Kept separate so the shape cases below stay compact.
+ *
+ * @return 0 if the transfer started, negative error code otherwise.
+ */
+static int spi_dma_run_async(struct capi_spi_device *dev,
+			     struct capi_spi_transfer *xfer)
+{
+	int ret;
+
+	spi_callback_count = 0U;
+	spi_callback_event = 0;
+	spi_callback_extra = 0;
+	ret = capi_spi_transceive_async(dev, xfer);
+	if (ret)
+		return ret;
+	TEST_WAIT_UNTIL(spi_callback_count > 0U, SPI_ASYNC_TIMEOUT_US,
+			SPI_ASYNC_STEP_US);
+
+	return 0;
+}
+
+/**
+ * @brief DMA async completion across asymmetric and single-direction shapes.
+ *
+ * spi_basic already drives the sync path (which routes through DMA on a
+ * dma_handle build), so this targets what only DMA async exercises: the
+ * per-channel completion counter (dma_expected_count). Each case asserts the
+ * callback fires exactly once and, where the loopback gives an oracle, that the
+ * received bytes match.
+ *
+ * Shapes: symmetric, tx > rx, rx > tx (TX must be dummy-extended past tx_size --
+ * on this platform that case is served by the FIFO path in software), write-only
+ * (the RX channel never starts, so completion rests on TX alone), read-only (no
+ * tx_buf, so TX shifts dummies and still raises its completion), and a
+ * zero-length transfer (completes immediately via the short-circuit).
+ *
+ * Assumes the controller can deliver async completion (DMA IRQ, and for the
+ * rx > tx fallback, SPI IRQ). On platforms without DMA this test is skipped.
+ *
+ * @return 0 on pass, negative error code on failure.
+ */
+static int spi_dma_shapes(void)
+{
+	struct capi_spi_controller_handle *spi_handle = NULL;
+	struct capi_spi_device dev = spi_dev;
+	int ret;
+
+	TEST_SECTION("DMA_SHAPES");
+	ret = capi_spi_init(&spi_handle, &spi_controller_config);
+	TEST_ASSERT_EQ_OR_CLEANUP(ret, 0, "INIT");
+	dev.controller = spi_handle;
+
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_register_callback(spi_handle,
+				  spi_test_callback, NULL), 0, "REGISTER_CALLBACK");
+
+	/* Symmetric full duplex: both channels run, expected count 2. */
+	uint8_t symm_tx[] = { 0x0f, 0xf0, 0xa5, 0x5a, 0x11, 0x22, 0x44, 0x88 };
+	uint8_t symm_rx[sizeof(symm_tx)];
+	memset(symm_rx, 0, sizeof(symm_rx));
+	struct capi_spi_transfer symm = {
+		.tx_buf = symm_tx,
+		.rx_buf = symm_rx,
+		.tx_size = sizeof(symm_tx),
+		.rx_size = sizeof(symm_rx),
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &symm), 0, "SYMM_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "SYMM_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_event, CAPI_SPI_EVENT_XFR_DONE,
+				  "SYMM_CB_EVENT");
+	TEST_ASSERT_EQ_OR_CLEANUP(memcmp(symm_rx, symm_tx, sizeof(symm_tx)), 0,
+				  "SYMM_MATCH");
+
+	/* tx > rx: clk_len = tx_size, keep only the first rx_size bytes. */
+	uint8_t tgr_tx[] = { 0x31, 0x41, 0x59, 0x26 };
+	uint8_t tgr_rx[2];
+	memset(tgr_rx, 0, sizeof(tgr_rx));
+	struct capi_spi_transfer tgr = {
+		.tx_buf = tgr_tx,
+		.rx_buf = tgr_rx,
+		.tx_size = sizeof(tgr_tx),
+		.rx_size = sizeof(tgr_rx),
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &tgr), 0, "TX_GT_RX_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "TX_GT_RX_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(memcmp(tgr_rx, tgr_tx, sizeof(tgr_rx)), 0,
+				  "TX_GT_RX_MATCH");
+
+	/* rx > tx: bytes past tx_size are dummy 0x00 shifted out to clock RX. */
+	uint8_t rgt_tx[] = { 0xbe, 0xef };
+	uint8_t rgt_rx[5];
+	memset(rgt_rx, 0xa5, sizeof(rgt_rx));
+	struct capi_spi_transfer rgt = {
+		.tx_buf = rgt_tx,
+		.rx_buf = rgt_rx,
+		.tx_size = sizeof(rgt_tx),
+		.rx_size = sizeof(rgt_rx),
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &rgt), 0, "RX_GT_TX_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "RX_GT_TX_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(memcmp(rgt_rx, rgt_tx, sizeof(rgt_tx)), 0,
+				  "RX_GT_TX_HEAD");
+	TEST_ASSERT_EQ_OR_CLEANUP(rgt_rx[2], 0x00, "RX_GT_TX_DUMMY2");
+	TEST_ASSERT_EQ_OR_CLEANUP(rgt_rx[3], 0x00, "RX_GT_TX_DUMMY3");
+	TEST_ASSERT_EQ_OR_CLEANUP(rgt_rx[4], 0x00, "RX_GT_TX_DUMMY4");
+
+	/* Write-only: rx_buf NULL, RX channel never starts (expected count 1). */
+	uint8_t wo_tx[] = { 0xca, 0xfe, 0xf0, 0x0d };
+	struct capi_spi_transfer wo = {
+		.tx_buf = wo_tx,
+		.rx_buf = NULL,
+		.tx_size = sizeof(wo_tx),
+		.rx_size = 0U,
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &wo), 0, "WRITE_ONLY_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "WRITE_ONLY_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_event, CAPI_SPI_EVENT_XFR_DONE,
+				  "WRITE_ONLY_CB_EVENT");
+
+	/* Read-only: tx_buf NULL, TX shifts dummies so it still completes. */
+	uint8_t ro_rx[4];
+	uint8_t zero4[4] = { 0 };
+	memset(ro_rx, 0xa5, sizeof(ro_rx));
+	struct capi_spi_transfer ro = {
+		.tx_buf = NULL,
+		.rx_buf = ro_rx,
+		.tx_size = 0U,
+		.rx_size = sizeof(ro_rx),
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &ro), 0, "READ_ONLY_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "READ_ONLY_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(memcmp(ro_rx, zero4, sizeof(ro_rx)), 0,
+				  "READ_ONLY_MATCH");
+
+	/* Zero-length: no channel runs, completes via the short-circuit. */
+	struct capi_spi_transfer empty = {
+		.tx_buf = NULL,
+		.rx_buf = NULL,
+		.tx_size = 0U,
+		.rx_size = 0U,
+	};
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_dma_run_async(&dev, &empty), 0, "ZERO_LEN_XFER");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_count, 1U, "ZERO_LEN_CB_COUNT");
+	TEST_ASSERT_EQ_OR_CLEANUP(spi_callback_event, CAPI_SPI_EVENT_XFR_DONE,
+				  "ZERO_LEN_CB_EVENT");
+
+	TEST_ASSERT_EQ_OR_CLEANUP(capi_spi_deinit(spi_handle), 0, "DEINIT");
+
+	return 0;
+}
+#endif /* SPI_HAS_DMA */
+
+#if SPI_HAS_IRQ || SPI_HAS_DMA
 /**
  * @brief Abort an in-flight async transfer, deterministically.
  *
@@ -450,6 +615,7 @@ static int spi_abort(void)
 
 	return 0;
 }
+#endif /* SPI_HAS_IRQ || SPI_HAS_DMA */
 
 #undef CLEANUP
 
@@ -628,51 +794,106 @@ static int spi_data(void)
 }
 
 /*
- * SPI_HAS_IRQ and SPI_HAS_DMA are mutually exclusive: the controller is
- * configured for exactly one async delivery mode per build (via SPI_EXTRA_INIT
- * and dma_handle in common_data). Async and abort are therefore gated per mode,
- * so only the entries matching the configured delivery run; the rest skip.
+ * Cases are grouped by what they actually require, and delivery is chosen at
+ * runtime by whether spi_controller_config.dma_handle is set.
+ *
+ * The no-DMA config always runs the blocking sync cases -- they use
+ * capi_spi_transceive() over the FIFO and need no interrupt at all -- and adds
+ * the FIFO async cases only when the SPI IRQ is available. The DMA config
+ * (compiled only when SPI_HAS_DMA) re-runs the sync cases through the DMA path
+ * and adds the DMA async cases; those need DMA, not the SPI IRQ. So sync runs on
+ * both sync paths, IRQ-only cases run only with an IRQ, and DMA-only cases run
+ * with DMA regardless of IRQ.
  */
-static const struct test_case spi_subtests[] = {
-	{ "BASIC",      spi_basic,      false        },
-	{ "MODES",      spi_modes,      false        },
-	{ "LSB_FIRST",  spi_lsb_first,  false        },
-	{ "DATA",       spi_data,       false        },
-	{ "ASYNC_IRQ",  spi_async_irq,  !SPI_HAS_IRQ },
-	{ "MANUAL_ISR", spi_manual_isr, !SPI_HAS_IRQ },
-	{ "ABORT_IRQ",  spi_abort,      !SPI_HAS_IRQ },
-	{ "ASYNC_DMA",  spi_async_dma,  !SPI_HAS_DMA },
-	{ "ABORT_DMA",  spi_abort,      !SPI_HAS_DMA },
+static const struct test_case spi_nodma_cases[] = {
+	{ "BASIC",      spi_basic,      false },
+	{ "MODES",      spi_modes,      false },
+	{ "LSB_FIRST",  spi_lsb_first,  false },
+	{ "DATA",       spi_data,       false },
+#if SPI_HAS_IRQ
+	{ "ASYNC_IRQ",  spi_async_irq,  false },
+	{ "MANUAL_ISR", spi_manual_isr, false },
+	{ "ABORT_IRQ",  spi_abort,      false },
+#endif /* SPI_HAS_IRQ */
 };
+
+#if SPI_HAS_DMA
+static const struct test_case spi_dma_cases[] = {
+	{ "BASIC",      spi_basic,      false },
+	{ "MODES",      spi_modes,      false },
+	{ "LSB_FIRST",  spi_lsb_first,  false },
+	{ "DATA",       spi_data,       false },
+	{ "ASYNC_DMA",  spi_async_dma,  false },
+	{ "DMA_SHAPES", spi_dma_shapes, false },
+	{ "ABORT_DMA",  spi_abort,      false },
+};
+#endif /* SPI_HAS_DMA */
 
 /**
  * @brief Exercise the CAPI SPI controller against an external loopback.
  *
- * Runs the SPI subtest table: a basic synchronous transfer, every clock mode,
- * LSB-first bit order, a data-integrity sweep, the async delivery paths
- * (IRQ-driven completion, manual ISR pumping, and DMA), and transfer abort.
- * Every case verifies behavior through the external loopback (rx == tx); none
- * inspect internal state or argument validation. Async and abort entries are
- * gated on the build's delivery mode (see the note on the table above), so a
- * build configured for one mode skips the other's cases.
+ * Runs the no-DMA config first (dma_handle cleared): blocking sync transfers
+ * over the FIFO -- which require no interrupt -- plus the FIFO async cases when
+ * the SPI IRQ is available. When DMA is available it then wires the DMA handle
+ * and runs the DMA config: the sync cases again (now through the DMA path) plus
+ * the DMA async cases, which need no SPI IRQ. Every case verifies behavior
+ * through the external loopback (rx == tx).
  *
  * API coverage:
  *   capi_spi_init()            init
  *   capi_spi_deinit()          deinit
- *   capi_spi_transceive()      basic, modes, lsb_first, data
- *   capi_spi_transceive_async() async (IRQ/DMA), manual ISR
- *   capi_spi_abort_async()     abort
+ *   capi_spi_transceive()      basic, modes, lsb_first, data (FIFO and DMA sync)
+ *   capi_spi_transceive_async() async (IRQ and DMA), manual ISR, DMA shapes
+ *   capi_spi_abort_async()     abort (IRQ and DMA)
  *
  * Setup assumption: common_data supplies one SPI controller wired for external
  * loopback (MOSI tied to MISO). No board- or vendor-specific behavior is
  * assumed.
  *
- * @return 0 on pass, first non-zero subtest error otherwise.
+ * @return 0 on pass, first non-zero subtest error across all configs otherwise.
  */
 int test_spi(void)
 {
-	return test_framework_run_cases(SPI_MODULE, spi_subtests,
-					sizeof(spi_subtests) / sizeof(spi_subtests[0]));
+	int first_error = 0;
+	int ret;
+
+	/*
+	 * No-DMA config: sync uses the FIFO path (no interrupt needed); FIFO
+	 * async cases are included only when the SPI IRQ is available.
+	 */
+	spi_controller_config.dma_handle = NULL;
+	ret = test_framework_run_cases(SPI_MODULE, spi_nodma_cases,
+				       sizeof(spi_nodma_cases) / sizeof(spi_nodma_cases[0]));
+	if (ret != 0 && first_error == 0)
+		first_error = ret;
+
+#if SPI_HAS_DMA
+	/*
+	 * DMA config: wire the DMA handle so both sync and async route through
+	 * DMA (no SPI IRQ required). The handle is a singleton (capi_dma_init
+	 * hands back the same one) and spi deinit only tears down channels, so
+	 * one init here serves every case across the init/deinit cycles.
+	 */
+	{
+		static struct capi_dma_handle *spi_dma_handle;
+
+		if (spi_dma_handle == NULL) {
+			ret = capi_dma_init(&spi_dma_handle, &dma_config);
+			if (ret != 0)
+				return first_error != 0 ? first_error : ret;
+		}
+		spi_controller_config.dma_handle = spi_dma_handle;
+	}
+	ret = test_framework_run_cases(SPI_MODULE "-DMA", spi_dma_cases,
+				       sizeof(spi_dma_cases) / sizeof(spi_dma_cases[0]));
+	if (ret != 0 && first_error == 0)
+		first_error = ret;
+
+	/* Restore the default (no-DMA) delivery. */
+	spi_controller_config.dma_handle = NULL;
+#endif /* SPI_HAS_DMA */
+
+	return first_error;
 }
 
 #endif /* SPI_OPS */

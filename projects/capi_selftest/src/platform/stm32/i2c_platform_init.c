@@ -22,6 +22,29 @@
 #include "stm32_hal.h"
 #include "capi_i2c.h"
 
+#if defined(STM32F469xx)
+/*
+ * The SDP-CK1Z (F469) Arduino header exposes only one I2C bus, so the dual-bus
+ * I2C loopback is not built for this board: I2C is left unmapped in
+ * parameters.h and test_i2c compiles out. These stubs keep the translation unit
+ * valid while CONFIG_CAPI_I2C is enabled project-wide and are never called. The
+ * implementation below targets I2C2 and uses RCC peripheral-clock-selection
+ * APIs that exist only on STM32F7.
+ */
+int i2c_platform_init(void)
+{
+	return -1;
+}
+
+void i2c_platform_deinit(void)
+{
+}
+
+void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle)
+{
+	(void)handle;
+}
+#else
 static struct capi_i2c_controller_handle *i2c2_handle;
 
 int i2c_platform_init(void)
@@ -85,3 +108,4 @@ void I2C2_ER_IRQHandler(void)
 	if (i2c2_handle)
 		capi_i2c_isr(i2c2_handle);
 }
+#endif /* !STM32F469xx */

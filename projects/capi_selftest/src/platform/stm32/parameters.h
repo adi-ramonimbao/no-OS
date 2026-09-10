@@ -19,44 +19,61 @@
 #include "stm32_capi_dma.h"
 #include "capi_uart.h"
 
+#if defined(STM32F469xx)
+extern UART_HandleTypeDef huart5;
+#else
 extern UART_HandleTypeDef huart3;
+#endif
 extern SPI_HandleTypeDef hspi1;
 
 #define UART_IDENTIFIER		0U
 #define UART_OPS		&stm32_capi_uart_ops
 #define UART_BAUDRATE		115200U
 #define UART_EXTRA_TYPE		struct stm32_uart_extra_config
-#define UART_EXTRA_INIT		{ .huart = &huart3 }
+#if defined(STM32F469xx)
+#define UART_EXTRA_INIT		{ .huart = &huart5 }	/* SDP-CK1Z console UART5 */
+#else
+#define UART_EXTRA_INIT		{ .huart = &huart3 }	/* NUCLEO-F767ZI console USART3 */
+#endif
 #define PLATFORM_NAME		"STM32"
 
 /*
- * GPIO loopback pair on NUCLEO-F767ZI:
- *   PE0 (output, GPIOE pin 0) wired to PC0 (input, GPIOC pin 0).
- * Each port is opened with num_pins=1 so bit 0 maps to physical pin 0.
+ * GPIO loopback pair.
  *
- * Both endpoints are physical pin 0: the port tests configure only bit 0
- * (num_pins=1) and the pin-loopback arrays are {0}; the input pin's line 0
- * routes to EXTI0 for the IRQ suite. PC0 replaces PF0 because PF0 is NOT
- * broken out on the Nucleo-144 header (it is tied to the ST-LINK MCU for
- * MCO/HSE-bypass). PC0 is exposed on the Arduino header as A1 and is unused
- * by any other peripheral in this design.
+ * NUCLEO-F767ZI: PE0 (output, bit 0) <-> PC0 (input, bit 0). Both endpoints are
+ *   bit 0, so the port-wide bitmask tests and the pin tests share one wire and
+ *   PC0 drives EXTI0 for the IRQ suite.
+ *   Jumper: PE0 (CN10/D34) <-> PC0 (CN9, Arduino A1).
  *
- *   Jumper: PE0 (CN10/D34) <-> PC0 (CN9, Arduino A1)
+ * SDP-CK1Z (EVAL-SDP-CK1Z / SDP-K1) -- Arduino Uno header only, for easy
+ *   jumpering: PA0 (output, D1, bit 0) <-> PC1 (input, A3, bit 1). The IRQ test
+ *   drives the output port's bit 0, so the output pin must be bit 0 (PA0 is the
+ *   only bit-0 pin on the header); the input is a different pin (PC1) and drives
+ *   EXTI1. The two pins sit at different bit positions, so the port-wide bitmask
+ *   tests are disabled (GPIO_HAS_PORT_LOOPBACK 0) and only the pin tests run.
+ *   Jumper: PA0 (Arduino D1) <-> PC1 (Arduino A3).
  */
+#if defined(STM32F469xx)
+#define GPIO_OUTPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOA)
+#define GPIO_OUTPUT_NAME		"PA0"
+#define GPIO_INPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOC)
+#define GPIO_INPUT_NAME			"PC1"
+#else
 #define GPIO_OUTPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOE)
+#define GPIO_OUTPUT_NAME		"PE0"
+#define GPIO_INPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOC)
+#define GPIO_INPUT_NAME			"PC0"
+#endif
 #define GPIO_OUTPUT_NUM_PINS		1U
 #define GPIO_OUTPUT_OPS			&stm32_capi_gpio_ops
-#define GPIO_OUTPUT_NAME		"PE0"
 #define GPIO_OUTPUT_EXTRA		struct stm32_capi_gpio_port_config
 #define GPIO_OUTPUT_EXTRA_INIT		{ .mode = GPIO_MODE_OUTPUT_PP, \
 					  .speed = GPIO_SPEED_FREQ_LOW, \
 					  .alternate = 0U, \
 					  .pull = GPIO_NOPULL }
 
-#define GPIO_INPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOC)
 #define GPIO_INPUT_NUM_PINS		1U
 #define GPIO_INPUT_OPS			&stm32_capi_gpio_ops
-#define GPIO_INPUT_NAME			"PC0"
 #define GPIO_INPUT_EXTRA		struct stm32_capi_gpio_port_config
 #define GPIO_INPUT_EXTRA_INIT		{ .mode = GPIO_MODE_INPUT, \
 					  .speed = GPIO_SPEED_FREQ_LOW, \
@@ -70,24 +87,34 @@ extern SPI_HandleTypeDef hspi1;
 #define GPIO_HAS_TOGGLE		0
 
 /*
- * Pin-level loopback: pin numbers are physical bit indices within the port
- * (PE0 = bit 0, PC0 = bit 0). The single wired pair is index 0 on each port.
+ * Pin-level loopback: pin numbers are physical bit indices within the port.
+ * NUCLEO-F767ZI wires PE0 (bit 0) <-> PC0 (bit 0). SDP-CK1Z wires PA0 (bit 0)
+ * <-> PC1 (bit 1) and disables the port-wide bitmask tests, whose readback
+ * assumes the output and input pins share a bit position.
  */
-#define GPIO_HAS_PIN_LOOPBACK	1
+#if defined(STM32F469xx)
+#define GPIO_HAS_PORT_LOOPBACK	0
+#define GPIO_OUTPUT_PIN_NUMBERS	{ 0U }
+#define GPIO_INPUT_PIN_NUMBERS	{ 1U }
+#else
 #define GPIO_OUTPUT_PIN_NUMBERS	{ 0U }
 #define GPIO_INPUT_PIN_NUMBERS	{ 0U }
+#endif
+#define GPIO_HAS_PIN_LOOPBACK	1
 
 /* SPI async delivery mode selection. */
 #define SPI_HAS_IRQ  1
 #define SPI_HAS_DMA  0
 
-/* IRQ controller — NVIC, no base address needed. */
+/* IRQ controller — NVIC, no base address and no extra config needed. */
 #define IRQ_CTRL_IDENTIFIER		0U
+#define IRQ_CTRL_EXTRA			NULL
 
 /*
- * SPI1 on NUCLEO-F767ZI:
- *   PA5 = SCK, PA6 = MISO, PA7 = MOSI
- *   External loopback requires PA7 physically wired to PA6.
+ * SPI1 external loopback.
+ *   NUCLEO-F767ZI: PA5 = SCK, PA6 = MISO, PA7 = MOSI; wire PA7 <-> PA6.
+ *   SDP-CK1Z:      PB3 = SCK, PB4 = MISO, PA7 = MOSI; wire PA7 <-> PB4
+ *                  (Arduino D11 MOSI <-> D12 MISO).
  */
 #define SPI_IDENTIFIER		((uint64_t)(uintptr_t)SPI1)
 #define SPI_OPS			&stm32_capi_spi_ops
@@ -99,7 +126,11 @@ extern SPI_HandleTypeDef hspi1;
 				  .rxdma_ch_id = 0U, \
 				  .txdma_ch_id = 0U, \
 				  .irq_num = SPI1_IRQn }
-#define SPI_CLK_FREQ		96000000U
+#if defined(STM32F469xx)
+#define SPI_CLK_FREQ		22500000U	/* SPI1 on APB2 @ 22.5 MHz (SDP-CK1Z) */
+#else
+#define SPI_CLK_FREQ		96000000U	/* SPI1 on APB2 @ 96 MHz (NUCLEO-F767ZI) */
+#endif
 
 #define SPI_DEVICE_NATIVE_CS	0x01U
 #define SPI_DEVICE_MODE		CAPI_SPI_MODE_0
@@ -142,13 +173,19 @@ extern SPI_HandleTypeDef hspi1;
 #define TIMER_HAS_COMPARE	1
 
 /*
- * I2C initiator/target loopback on NUCLEO-F767ZI:
- *   Initiator = I2C1, target = I2C2, wired PB6/PB9 (I2C1) <-> PB10/PB11 (I2C2).
- * CubeMX only sets up I2C1, so i2c_platform_init() brings up I2C2's clock,
- * pins and NVIC and installs the IRQ vectors that dispatch to capi_i2c_isr;
- * the test calls I2C_PLATFORM_SET_TARGET() after init so those vectors reach
- * the target handle.
+ * I2C initiator/target loopback. CubeMX only sets up the initiator (I2C1), so
+ * i2c_platform_init() brings up the target bus (clock, pins, NVIC) and installs
+ * the IRQ vectors that dispatch to capi_i2c_isr; the test calls
+ * I2C_PLATFORM_SET_TARGET() after init so those vectors reach the target handle.
+ *
+ * NUCLEO-F767ZI: initiator I2C1 (PB6/PB9) <-> target I2C2 (PB10/PB11).
+ *
+ * The SDP-CK1Z (SDP-K1) Arduino header exposes only one I2C bus (I2C1 on
+ * D14/D15); the F469 has no second I2C peripheral that muxes onto header pins,
+ * so a jumpered dual-bus loopback is not possible there. I2C is therefore left
+ * unmapped on that board and test_i2c compiles out to a skipping stub.
  */
+#if !defined(STM32F469xx)
 #define I2C_IDENTIFIER		1U
 #define I2C_OPS			&stm32_capi_i2c_ops
 #define I2C_EXTRA_TYPE		struct stm32_i2c_extra_config
@@ -168,6 +205,7 @@ void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle);
 #define I2C_PLATFORM_INIT()		i2c_platform_init()
 #define I2C_PLATFORM_DEINIT()		i2c_platform_deinit()
 #define I2C_PLATFORM_SET_TARGET(h)	i2c_platform_set_target_handle(h)
+#endif /* !STM32F469xx */
 
 /*
  * DMA2 on NUCLEO-F767ZI: only DMA2 supports memory-to-memory transfers.
@@ -190,5 +228,16 @@ void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle);
 				  .trig = NULL }
 #define DMA_PLATFORM_INIT()	__HAL_RCC_DMA2_CLK_ENABLE()
 #define DMA_XFER_SIZE		64U
+
+/*
+ * The STM32 CAPI DMA backend is polling-only: it implements no
+ * register_complete_callback op, so the CAPI wrapper returns -EINVAL and no
+ * completion interrupt can be delivered. xfer_start() blocks until the transfer
+ * finishes. The DMA ASYNC case is therefore skipped on this platform.
+ */
+#define DMA_HAS_IRQ		0
+
+/* Largest buffer the DMA sizes sweep / increment cases allocate (bytes). */
+#define DMA_MAX_XFER_SIZE	256U
 
 #endif /* __PARAMETERS_H__ */

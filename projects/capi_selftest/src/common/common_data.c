@@ -204,7 +204,7 @@ static SPI_EXTRA_TYPE spi_extra = SPI_EXTRA_INIT;
 /**
  * @brief CAPI configuration for the SPI controller.
  */
-const struct capi_spi_config spi_controller_config = {
+struct capi_spi_config spi_controller_config = {
 	.ops = SPI_OPS,
 	.identifier = SPI_IDENTIFIER,
 	.dma_handle = NULL,
@@ -263,7 +263,7 @@ static I2C_EXTRA_TYPE i2c_extra = I2C_EXTRA_INIT;
 /**
  * @brief CAPI I2C initiator configuration for the loopback tests.
  */
-const struct capi_i2c_config i2c_master_config = {
+struct capi_i2c_config i2c_master_config = {
 	.identifier = I2C_IDENTIFIER,
 	.clk_freq_hz = 0U,
 	.initiator = true,
@@ -366,6 +366,16 @@ const struct capi_uart_config uart_async_config = {
  */
 DMA_XFER_EXTRA_TYPE dma_xfer_extra = DMA_XFER_EXTRA_INIT;
 
+#ifdef DMA_EXTRA_TYPE
+/**
+ * @brief Platform-specific DMA controller extra config.
+ */
+static DMA_EXTRA_TYPE dma_extra = DMA_EXTRA_INIT;
+#define DMA_EXTRA_PTR	(&dma_extra)
+#else
+#define DMA_EXTRA_PTR	NULL
+#endif
+
 /**
  * @brief CAPI DMA configuration for the memory-to-memory tests.
  */
@@ -374,6 +384,6 @@ const struct capi_dma_config dma_config = {
 	.num_chans = DMA_NUM_CHANS,
 	.ops = DMA_OPS,
 	.irq_handle = NULL,
-	.extra = NULL,
+	.extra = DMA_EXTRA_PTR,
 };
 #endif /* DMA_OPS */
