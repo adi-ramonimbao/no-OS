@@ -61,7 +61,7 @@ static int _max_capi_dma_get_width(enum capi_dma_xfer_size size,
  * @param config The config struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_init(struct capi_dma_handle **handle,
+static int max_capi_dma_init(struct capi_dma_handle **handle,
 		      const struct capi_dma_config *config)
 {
 	int ret;
@@ -151,7 +151,7 @@ free_handle:
  * @param handle The DMA handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_deinit(struct capi_dma_handle *handle)
+static int max_capi_dma_deinit(struct capi_dma_handle *handle)
 {
 	struct max_capi_dma_priv *dma_priv;
 	uint8_t i;
@@ -192,7 +192,7 @@ int max_capi_dma_deinit(struct capi_dma_handle *handle)
  * @param id ID of the DMA channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_init_chan(struct capi_dma_handle *handle,
+static int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 			   struct capi_dma_chan **chan_ptr, uint32_t id)
 {
 	int hw_id, ret;
@@ -271,7 +271,7 @@ free_channel:
  * @param chan The DMA channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
+static int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 {
 	int ret = 0;
 	struct max_capi_dma_priv *dma_priv;
@@ -306,7 +306,7 @@ int max_capi_dma_deinit_chan(struct capi_dma_chan *chan)
  * @param xfer The transfer configuration struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
+static int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
 			     struct capi_dma_transfer *xfer)
 {
 	int ret;
@@ -394,7 +394,7 @@ int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
  * @param chan The DMA channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
+static int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
 {
 	int ret, flags;
 	struct max_capi_dma_ch_priv *ch_priv;
@@ -423,7 +423,7 @@ int max_capi_dma_xfer_start(struct capi_dma_chan *chan)
  * @param chan The DMA channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_xfer_abort(struct capi_dma_chan *chan)
+static int max_capi_dma_xfer_abort(struct capi_dma_chan *chan)
 {
 	int ret;
 	struct max_capi_dma_ch_priv *ch_priv;
@@ -471,7 +471,7 @@ bool max_capi_dma_chan_is_completed(const struct capi_dma_chan *chan)
  * @param handle The DMA handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_isr(struct capi_dma_handle *handle)
+static int max_capi_dma_isr(struct capi_dma_handle *handle)
 {
 	if (!handle)
 		return -EINVAL;
@@ -487,7 +487,7 @@ int max_capi_dma_isr(struct capi_dma_handle *handle)
  * @param chan The DMA channel
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_isr_chan(struct capi_dma_chan *chan)
+static int max_capi_dma_isr_chan(struct capi_dma_chan *chan)
 {
 	struct max_capi_dma_ch_priv *ch_priv;
 	int flags;
@@ -526,7 +526,7 @@ int max_capi_dma_isr_chan(struct capi_dma_chan *chan)
  * @param xfer_complete_ctx Context data to be passed to the function
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_register_complete_callback(struct capi_dma_chan *chan,
+static int max_capi_dma_register_complete_callback(struct capi_dma_chan *chan,
 		capi_dma_xfer_complete_cb callback,
 		void *xfer_complete_ctx)
 {
@@ -546,7 +546,7 @@ int max_capi_dma_register_complete_callback(struct capi_dma_chan *chan,
  * @param error_ctx Context data to be passed to the function
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_dma_register_error_callback(struct capi_dma_chan *chan,
+static int max_capi_dma_register_error_callback(struct capi_dma_chan *chan,
 		capi_dma_error_cb callback,
 		void *error_ctx)
 {

@@ -23,7 +23,7 @@ static struct capi_rtc_handle *rtc = NULL;
 
 /** Forward declarations ******************************************************/
 
-void max_capi_rtc_isr(void *handle);
+static void max_capi_rtc_isr(void *handle);
 
 /** Function implementations **************************************************/
 
@@ -33,7 +33,7 @@ void max_capi_rtc_isr(void *handle);
  * @param config RTC configuration
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_init(struct capi_rtc_handle **handle,
+static int max_capi_rtc_init(struct capi_rtc_handle **handle,
 		      const struct capi_rtc_config *config)
 {
 	int ret;
@@ -143,7 +143,7 @@ free_handle:
  * @param handle The RTC handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
+static int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -180,7 +180,7 @@ int max_capi_rtc_deinit(struct capi_rtc_handle *handle)
  * @param handle The RTC handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_start(struct capi_rtc_handle *handle)
+static int max_capi_rtc_start(struct capi_rtc_handle *handle)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -204,7 +204,7 @@ int max_capi_rtc_start(struct capi_rtc_handle *handle)
  * @param handle The RTC handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_stop(struct capi_rtc_handle *handle)
+static int max_capi_rtc_stop(struct capi_rtc_handle *handle)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -229,7 +229,7 @@ int max_capi_rtc_stop(struct capi_rtc_handle *handle)
  * @param time Where to store the current time
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_get_time(struct capi_rtc_handle *handle,
+static int max_capi_rtc_get_time(struct capi_rtc_handle *handle,
 			  struct capi_rtc_time *time)
 {
 	int ret;
@@ -255,7 +255,7 @@ int max_capi_rtc_get_time(struct capi_rtc_handle *handle,
  * @param time The time struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_set_time(struct capi_rtc_handle *handle,
+static int max_capi_rtc_set_time(struct capi_rtc_handle *handle,
 			  const struct capi_rtc_time *time)
 {
 	int ret;
@@ -293,7 +293,7 @@ int max_capi_rtc_set_time(struct capi_rtc_handle *handle,
  * @param datetime Where to store the datetime
  * @return -ENOSYS
  */
-int max_capi_rtc_get_datetime(struct capi_rtc_handle *handle,
+static int max_capi_rtc_get_datetime(struct capi_rtc_handle *handle,
 			      struct capi_rtc_datetime *datetime)
 {
 	return -ENOSYS;
@@ -306,7 +306,7 @@ int max_capi_rtc_get_datetime(struct capi_rtc_handle *handle,
  * @param datetime The datetime struct
  * @return -ENOSYS
  */
-int max_capi_rtc_set_datetime(struct capi_rtc_handle *handle,
+static int max_capi_rtc_set_datetime(struct capi_rtc_handle *handle,
 			      const struct capi_rtc_datetime *datetime)
 {
 	return -ENOSYS;
@@ -319,7 +319,7 @@ int max_capi_rtc_set_datetime(struct capi_rtc_handle *handle,
  * @param alarm_value Pointer to alarm value
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
+static int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
 			   enum capi_rtc_alarm_type type,
 			   const void *alarm_value)
 {
@@ -366,7 +366,7 @@ int max_capi_rtc_set_alarm(struct capi_rtc_handle *handle,
  * @param type Alarm type
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_disable_alarm(struct capi_rtc_handle *handle,
+static int max_capi_rtc_disable_alarm(struct capi_rtc_handle *handle,
 			       enum capi_rtc_alarm_type type)
 {
 	int ret;
@@ -399,7 +399,7 @@ int max_capi_rtc_disable_alarm(struct capi_rtc_handle *handle,
  * @param freq The square wave frequency
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_sqwave_enable(struct capi_rtc_handle *handle,
+static int max_capi_rtc_sqwave_enable(struct capi_rtc_handle *handle,
 			       enum capi_rtc_sqwave_freq freq)
 {
 	int ret;
@@ -437,7 +437,7 @@ int max_capi_rtc_sqwave_enable(struct capi_rtc_handle *handle,
  * @param handle The RTC handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_sqwave_disable(struct capi_rtc_handle *handle)
+static int max_capi_rtc_sqwave_disable(struct capi_rtc_handle *handle)
 {
 	int ret;
 
@@ -457,7 +457,7 @@ int max_capi_rtc_sqwave_disable(struct capi_rtc_handle *handle)
  * @param trim Trim value
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_trim(struct capi_rtc_handle *handle, int8_t trim)
+static int max_capi_rtc_trim(struct capi_rtc_handle *handle, int8_t trim)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -487,7 +487,7 @@ int max_capi_rtc_trim(struct capi_rtc_handle *handle, int8_t trim)
  * @param event_ctx Context pointer for callback
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_register_callback(struct capi_rtc_handle *handle,
+static int max_capi_rtc_register_callback(struct capi_rtc_handle *handle,
 				   capi_rtc_event_callback_t callback,
 				   void *event_ctx)
 {
@@ -509,7 +509,7 @@ int max_capi_rtc_register_callback(struct capi_rtc_handle *handle,
  * @param event Event to enable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
+static int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -547,7 +547,7 @@ int max_capi_rtc_enable_event(struct capi_rtc_handle *handle, uint32_t event)
  * @param event Event to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_rtc_disable_event(struct capi_rtc_handle *handle, uint32_t event)
+static int max_capi_rtc_disable_event(struct capi_rtc_handle *handle, uint32_t event)
 {
 	int ret;
 	struct max_capi_rtc_priv *rtc_priv;
@@ -580,7 +580,7 @@ int max_capi_rtc_disable_event(struct capi_rtc_handle *handle, uint32_t event)
  * @brief RTC interrupt handler
  * @param handle The RTC handle
  */
-void max_capi_rtc_isr(void *handle)
+static void max_capi_rtc_isr(void *handle)
 {
 	struct capi_rtc_handle *rtc_handle = (struct capi_rtc_handle *)handle;
 	struct max_capi_rtc_priv *rtc_priv;

@@ -24,7 +24,7 @@ static struct capi_trng_handle *trng = NULL;
 
 /** Forward declarations ******************************************************/
 
-void max_capi_trng_isr(void *handle);
+static void max_capi_trng_isr(void *handle);
 
 /** Helper functions **********************************************************/
 
@@ -60,7 +60,7 @@ static void _max_capi_trng_msdk_callback(void *req, int result)
  * @param config Configuration struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_init(struct capi_trng_handle **handle,
+static int max_capi_trng_init(struct capi_trng_handle **handle,
 		       const struct capi_trng_config *config)
 {
 	int ret;
@@ -157,7 +157,7 @@ free_handle:
  * @param handle The TRNG handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_deinit(struct capi_trng_handle *handle)
+static int max_capi_trng_deinit(struct capi_trng_handle *handle)
 {
 	int ret;
 	struct max_capi_trng_priv *trng_priv;
@@ -193,7 +193,7 @@ int max_capi_trng_deinit(struct capi_trng_handle *handle)
  * @param value Where to store the unsigned 32-bit number
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_generate_u32(struct capi_trng_handle *handle, uint32_t *value)
+static int max_capi_trng_generate_u32(struct capi_trng_handle *handle, uint32_t *value)
 {
 	if (!handle || !handle->priv || !value)
 		return -EINVAL;
@@ -210,7 +210,7 @@ int max_capi_trng_generate_u32(struct capi_trng_handle *handle, uint32_t *value)
  * @param length The length of the buffer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_fill_buffer(struct capi_trng_handle *handle, uint8_t *buffer,
+static int max_capi_trng_fill_buffer(struct capi_trng_handle *handle, uint8_t *buffer,
 			      uint32_t length)
 {
 	int ret;
@@ -235,7 +235,7 @@ int max_capi_trng_fill_buffer(struct capi_trng_handle *handle, uint8_t *buffer,
  * @param length The length of the buffer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
+static int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
 				    uint8_t *buffer, uint32_t length)
 {
 	struct max_capi_trng_priv *trng_priv;
@@ -265,7 +265,7 @@ int max_capi_trng_fill_buffer_async(struct capi_trng_handle *handle,
  * @param handle The TRNG handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_abort_async(struct capi_trng_handle *handle)
+static int max_capi_trng_abort_async(struct capi_trng_handle *handle)
 {
 	struct max_capi_trng_priv *trng_priv;
 
@@ -301,7 +301,7 @@ int max_capi_trng_abort_async(struct capi_trng_handle *handle)
  * @param is_busy True if TRNG in progress, False if not
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_is_busy(struct capi_trng_handle *handle, bool *is_busy)
+static int max_capi_trng_is_busy(struct capi_trng_handle *handle, bool *is_busy)
 {
 	struct max_capi_trng_priv *trng_priv;
 
@@ -321,7 +321,7 @@ int max_capi_trng_is_busy(struct capi_trng_handle *handle, bool *is_busy)
  * @param callback_arg The callback function argument
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_register_callback(struct capi_trng_handle *handle,
+static int max_capi_trng_register_callback(struct capi_trng_handle *handle,
 				    capi_trng_callback_t callback,
 				    void *callback_arg)
 {
@@ -343,7 +343,7 @@ int max_capi_trng_register_callback(struct capi_trng_handle *handle,
  * @param handle The TRNG handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_trng_health_test(struct capi_trng_handle *handle)
+static int max_capi_trng_health_test(struct capi_trng_handle *handle)
 {
 	int ret;
 
@@ -361,7 +361,7 @@ int max_capi_trng_health_test(struct capi_trng_handle *handle)
  * @brief Interrupt handler for the TRNG peripheral
  * @param handle The TRNG handle
  */
-void max_capi_trng_isr(void *handle)
+static void max_capi_trng_isr(void *handle)
 {
 	struct capi_trng_handle *trng_handle = (struct capi_trng_handle *)handle;
 

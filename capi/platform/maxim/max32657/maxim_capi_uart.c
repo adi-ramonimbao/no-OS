@@ -26,7 +26,7 @@ static int8_t stdio_index = -1;
 
 /** Forward declarations ******************************************************/
 
-void max_capi_uart_isr(void *handle);
+static void max_capi_uart_isr(void *handle);
 
 /** Helper functions **********************************************************/
 
@@ -312,7 +312,7 @@ static int _max_capi_uart_map_line_config(const struct capi_uart_line_config
  * @param config UART config struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_init(struct capi_uart_handle **handle,
+static int max_capi_uart_init(struct capi_uart_handle **handle,
 		       const struct capi_uart_config *config)
 {
 	int ret;
@@ -496,7 +496,7 @@ free_handle:
  * @param handle The UART handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_deinit(struct capi_uart_handle *handle)
+static int max_capi_uart_deinit(struct capi_uart_handle *handle)
 {
 	struct max_capi_uart_priv *uart_priv;
 	uint8_t id;
@@ -537,7 +537,7 @@ int max_capi_uart_deinit(struct capi_uart_handle *handle)
  * @param len - Number of bytes to read.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_receive(struct capi_uart_handle *handle, uint8_t *buf,
+static int max_capi_uart_receive(struct capi_uart_handle *handle, uint8_t *buf,
 			  uint32_t len)
 {
 	int ret, n;
@@ -564,7 +564,7 @@ int max_capi_uart_receive(struct capi_uart_handle *handle, uint8_t *buf,
  * @param len - Number of bytes to write.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_transmit(struct capi_uart_handle *handle, uint8_t *buf,
+static int max_capi_uart_transmit(struct capi_uart_handle *handle, uint8_t *buf,
 			   uint32_t len)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -602,7 +602,7 @@ int max_capi_uart_transmit(struct capi_uart_handle *handle, uint8_t *buf,
  * @param len - Number of bytes to read.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
+static int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
 				uint32_t len)
 {
 	int ret;
@@ -651,7 +651,7 @@ int max_capi_uart_receive_async(struct capi_uart_handle *handle, uint8_t *buf,
  * @param len - Number of bytes to write.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
+static int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
 				 uint8_t *buf, uint32_t len)
 {
 	int ret;
@@ -699,7 +699,7 @@ int max_capi_uart_transmit_async(struct capi_uart_handle *handle,
  * @param callback The callback function
  * @param callback_arg Callback arg
  */
-int max_capi_uart_register_callback(struct capi_uart_handle *handle,
+static int max_capi_uart_register_callback(struct capi_uart_handle *handle,
 				    capi_uart_callback const callback,
 				    void *const callback_arg)
 {
@@ -719,7 +719,7 @@ int max_capi_uart_register_callback(struct capi_uart_handle *handle,
  * @brief Interrupt function for UART
  * @param handle The UART handle
  */
-void max_capi_uart_isr(void *handle)
+static void max_capi_uart_isr(void *handle)
 {
 	struct capi_uart_handle *uart_handle = (struct capi_uart_handle *)handle;
 	struct max_capi_uart_priv *uart_priv;
@@ -738,7 +738,7 @@ void max_capi_uart_isr(void *handle)
  * @param line_config The line config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_set_line_config(struct capi_uart_handle *handle,
+static int max_capi_uart_set_line_config(struct capi_uart_handle *handle,
 				  struct capi_uart_line_config *line_config)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -784,7 +784,7 @@ int max_capi_uart_set_line_config(struct capi_uart_handle *handle,
  * @param line_config Where to store the line config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_get_line_config(struct capi_uart_handle *handle,
+static int max_capi_uart_get_line_config(struct capi_uart_handle *handle,
 				  struct capi_uart_line_config *line_config)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -805,7 +805,7 @@ int max_capi_uart_get_line_config(struct capi_uart_handle *handle,
  * @param handle The UART handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_flush_rx_fifo(struct capi_uart_handle *handle)
+static int max_capi_uart_flush_rx_fifo(struct capi_uart_handle *handle)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -822,7 +822,7 @@ int max_capi_uart_flush_rx_fifo(struct capi_uart_handle *handle)
  * @param handle The UART handle
  * @return 0 on succes, negative error code otherwise
  */
-int max_capi_uart_flush_tx_fifo(struct capi_uart_handle *handle)
+static int max_capi_uart_flush_tx_fifo(struct capi_uart_handle *handle)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -840,7 +840,7 @@ int max_capi_uart_flush_tx_fifo(struct capi_uart_handle *handle)
  * @param count Where to store the number of bytes
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_get_rx_fifo_count(struct capi_uart_handle *handle,
+static int max_capi_uart_get_rx_fifo_count(struct capi_uart_handle *handle,
 				    uint16_t *count)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -861,7 +861,7 @@ int max_capi_uart_get_rx_fifo_count(struct capi_uart_handle *handle,
  * @param count Where to store the number of bytes
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_get_tx_fifo_count(struct capi_uart_handle *handle,
+static int max_capi_uart_get_tx_fifo_count(struct capi_uart_handle *handle,
 				    uint16_t *count)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -882,7 +882,7 @@ int max_capi_uart_get_tx_fifo_count(struct capi_uart_handle *handle,
  * @param reason Where to store the interrupt reason
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_get_interrupt_reason(struct capi_uart_handle *handle,
+static int max_capi_uart_get_interrupt_reason(struct capi_uart_handle *handle,
 				       enum capi_uart_interrupt_reason *reason)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -916,7 +916,7 @@ int max_capi_uart_get_interrupt_reason(struct capi_uart_handle *handle,
  * @param status_flags Where to store the status flags
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_get_line_status(struct capi_uart_handle *handle,
+static int max_capi_uart_get_line_status(struct capi_uart_handle *handle,
 				  uint32_t *status_flags)
 {
 	struct max_capi_uart_priv *uart_priv;
@@ -1005,7 +1005,7 @@ uint32_t max_capi_uart_write_byte(struct capi_uart_handle *handle, uint8_t byte)
  * @param enable true to enable, false to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
+static int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1031,7 +1031,7 @@ int max_capi_uart_set_irq_tx(struct capi_uart_handle *handle, bool enable)
  * @param ready Where to store the ready status
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_irq_tx_ready(struct capi_uart_handle *handle, bool *ready)
+static int max_capi_uart_irq_tx_ready(struct capi_uart_handle *handle, bool *ready)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1051,7 +1051,7 @@ int max_capi_uart_irq_tx_ready(struct capi_uart_handle *handle, bool *ready)
  * @param complete Where to store the completion status
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_irq_tx_complete(struct capi_uart_handle *handle, bool *complete)
+static int max_capi_uart_irq_tx_complete(struct capi_uart_handle *handle, bool *complete)
 {
 	struct max_capi_uart_priv *uart_priv;
 	uint32_t status;
@@ -1074,7 +1074,7 @@ int max_capi_uart_irq_tx_complete(struct capi_uart_handle *handle, bool *complet
  * @param enable true to enable, false to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_set_irq_rx(struct capi_uart_handle *handle, bool enable)
+static int max_capi_uart_set_irq_rx(struct capi_uart_handle *handle, bool enable)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1103,7 +1103,7 @@ int max_capi_uart_set_irq_rx(struct capi_uart_handle *handle, bool enable)
  * @param ready Where to store the data-ready status
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_irq_rx_ready(struct capi_uart_handle *handle, bool *ready)
+static int max_capi_uart_irq_rx_ready(struct capi_uart_handle *handle, bool *ready)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1123,7 +1123,7 @@ int max_capi_uart_irq_rx_ready(struct capi_uart_handle *handle, bool *ready)
  * @param enable true to enable, false to disable
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_set_irq_err(struct capi_uart_handle *handle, bool enable)
+static int max_capi_uart_set_irq_err(struct capi_uart_handle *handle, bool enable)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1154,7 +1154,7 @@ int max_capi_uart_set_irq_err(struct capi_uart_handle *handle, bool enable)
  * @param pending Where to store the pending status
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_uart_is_irq_pending(struct capi_uart_handle *handle, bool *pending)
+static int max_capi_uart_is_irq_pending(struct capi_uart_handle *handle, bool *pending)
 {
 	struct max_capi_uart_priv *uart_priv;
 
@@ -1175,7 +1175,7 @@ int max_capi_uart_is_irq_pending(struct capi_uart_handle *handle, bool *pending)
  * @param enable Whether to enable or disable
  * @return -ENOSYS
  */
-int max_capi_uart_enable_fifo(struct capi_uart_handle *handle, bool enable)
+static int max_capi_uart_enable_fifo(struct capi_uart_handle *handle, bool enable)
 {
 	return -ENOSYS;
 }
@@ -1187,7 +1187,7 @@ int max_capi_uart_enable_fifo(struct capi_uart_handle *handle, bool enable)
  * @param is_address Whether it is an address or data byte
  * @return -ENOSYS
  */
-int max_capi_uart_transmit_9bit(struct capi_uart_handle *handle, uint16_t data,
+static int max_capi_uart_transmit_9bit(struct capi_uart_handle *handle, uint16_t data,
 				bool is_address)
 {
 	return -ENOSYS;
@@ -1200,7 +1200,7 @@ int max_capi_uart_transmit_9bit(struct capi_uart_handle *handle, uint16_t data,
  * @param is_address Whether it is an address or data byte
  * @return -ENOSYS
  */
-int max_capi_uart_receive_9bit(struct capi_uart_handle *handle, uint16_t *data,
+static int max_capi_uart_receive_9bit(struct capi_uart_handle *handle, uint16_t *data,
 			       bool *is_address)
 {
 	return -ENOSYS;
@@ -1213,7 +1213,7 @@ int max_capi_uart_receive_9bit(struct capi_uart_handle *handle, uint16_t *data,
  * @param cts_state CTS signal state
  * @return -ENOSYS
  */
-int max_capi_uart_set_flow_control_state(struct capi_uart_handle *handle,
+static int max_capi_uart_set_flow_control_state(struct capi_uart_handle *handle,
 		bool rts_state, bool cts_state)
 {
 	return -ENOSYS;
@@ -1226,7 +1226,7 @@ int max_capi_uart_set_flow_control_state(struct capi_uart_handle *handle,
  * @param cts_state Where to store the CTS signal state
  * @return -ENOSYS
  */
-int max_capi_uart_get_flow_control_state(struct capi_uart_handle *handle,
+static int max_capi_uart_get_flow_control_state(struct capi_uart_handle *handle,
 		bool *rts_state, bool *cts_state)
 {
 	return -ENOSYS;

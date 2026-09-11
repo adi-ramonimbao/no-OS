@@ -24,7 +24,7 @@ static struct capi_wdt_handle *wdt[MXC_CFG_WDT_INSTANCES] = {NULL};
 
 /** Forward declarations ******************************************************/
 
-void max_capi_wdt_isr(void *handle);
+static void max_capi_wdt_isr(void *handle);
 
 /** Helper functions **********************************************************/
 
@@ -84,7 +84,7 @@ static int _max_capi_wdt_us_to_period(uint64_t timeout_us,
  * @param config The config struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_init(struct capi_wdt_handle **handle,
+static int max_capi_wdt_init(struct capi_wdt_handle **handle,
 		      const struct capi_wdt_config *config)
 {
 	int ret;
@@ -206,7 +206,7 @@ free_handle:
  * @param handle The WDT handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
+static int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
 {
 	const struct max_capi_wdt_priv *wdt_priv;
 	uint8_t id;
@@ -240,7 +240,7 @@ int max_capi_wdt_deinit(struct capi_wdt_handle *handle)
  * @param channels Where to store the number of channels.
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_get_chan_count(struct capi_wdt_handle *handle, int *channels)
+static int max_capi_wdt_get_chan_count(struct capi_wdt_handle *handle, int *channels)
 {
 	if (!handle || !channels)
 		return -EINVAL;
@@ -258,7 +258,7 @@ int max_capi_wdt_get_chan_count(struct capi_wdt_handle *handle, int *channels)
  * @param chan_config The configuration struct
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
+static int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
 			    const struct capi_wdt_chan_config *chan_config)
 {
 	int ret;
@@ -353,7 +353,7 @@ int max_capi_wdt_setup_chan(struct capi_wdt_handle *handle, int chan_id,
  * @param chan_id The channel ID - must be 0
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_disable_chan(struct capi_wdt_handle *handle, int chan_id)
+static int max_capi_wdt_disable_chan(struct capi_wdt_handle *handle, int chan_id)
 {
 	struct max_capi_wdt_priv *wdt_priv;
 
@@ -379,7 +379,7 @@ int max_capi_wdt_disable_chan(struct capi_wdt_handle *handle, int chan_id)
  * @param chan_id The channel ID - must be 0
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_wdt_feed_chan(struct capi_wdt_handle *handle, int chan_id)
+static int max_capi_wdt_feed_chan(struct capi_wdt_handle *handle, int chan_id)
 {
 	struct max_capi_wdt_priv *wdt_priv;
 
@@ -423,7 +423,7 @@ int max_capi_wdt_feed_chan(struct capi_wdt_handle *handle, int chan_id)
  * @brief The ISR for the WDT peripheral
  * @param handle The WDT handle
  */
-void max_capi_wdt_isr(void *handle)
+static void max_capi_wdt_isr(void *handle)
 {
 	struct capi_wdt_handle *wdt_handle = handle;
 	struct max_capi_wdt_priv *wdt_priv;

@@ -23,7 +23,7 @@
 
 /** Forward declarations ******************************************************/
 
-void max_capi_spi_isr(void *handle);
+static void max_capi_spi_isr(void *handle);
 
 /** Static variables **********************************************************/
 
@@ -691,7 +691,7 @@ deinit_rx_chan:
  * @param config The SPI initialization config
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_init(struct capi_spi_controller_handle **handle,
+static int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 		      const struct capi_spi_config *config)
 {
 	int ret;
@@ -908,7 +908,7 @@ shutdown_spi:
  * @param handle The SPI controller handle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
+static int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
 {
 	int ret;
 	struct max_capi_spi_priv *spi_priv;
@@ -951,7 +951,7 @@ int max_capi_spi_deinit(struct capi_spi_controller_handle *handle)
  * @param transfer The SPI transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_transceive(struct capi_spi_device *device,
+static int max_capi_spi_transceive(struct capi_spi_device *device,
 			    struct capi_spi_transfer *transfer)
 {
 	const struct max_capi_spi_priv *spi_priv;
@@ -973,7 +973,7 @@ int max_capi_spi_transceive(struct capi_spi_device *device,
  * @param timeout timeout - not used
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_transceive_async(struct capi_spi_device *device,
+static int max_capi_spi_transceive_async(struct capi_spi_device *device,
 				  struct capi_spi_transfer *transfer,
 				  int timeout)
 {
@@ -1002,7 +1002,7 @@ int max_capi_spi_transceive_async(struct capi_spi_device *device,
  * @param callback_arg The argument for the callback function
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_register_callback(struct capi_spi_controller_handle *handle,
+static int max_capi_spi_register_callback(struct capi_spi_controller_handle *handle,
 				   capi_spi_callback_t const callback,
 				   void *callback_arg)
 {
@@ -1025,7 +1025,7 @@ int max_capi_spi_register_callback(struct capi_spi_controller_handle *handle,
  * @param transfer The SPI transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_read_command(struct capi_spi_device *device,
+static int max_capi_spi_read_command(struct capi_spi_device *device,
 			      struct capi_spi_transfer *transfer)
 {
 	const struct max_capi_spi_priv *spi_priv;
@@ -1047,7 +1047,7 @@ int max_capi_spi_read_command(struct capi_spi_device *device,
  * @param transfer The SPI transfer
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_read_command_async(struct capi_spi_device *device,
+static int max_capi_spi_read_command_async(struct capi_spi_device *device,
 				    struct capi_spi_transfer *transfer)
 {
 	const struct max_capi_spi_priv *spi_priv;
@@ -1073,7 +1073,7 @@ int max_capi_spi_read_command_async(struct capi_spi_device *device,
  * @param device The SPI device
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_abort_async(struct capi_spi_device *device)
+static int max_capi_spi_abort_async(struct capi_spi_device *device)
 {
 	struct max_capi_spi_priv *spi_priv;
 	struct max_capi_spi_fifo_async *fifo_async;
@@ -1117,7 +1117,7 @@ int max_capi_spi_abort_async(struct capi_spi_device *device)
  * @param cs_control The chip select mode
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_spi_set_cs(struct capi_spi_device *device,
+static int max_capi_spi_set_cs(struct capi_spi_device *device,
 			enum capi_spi_cs_control cs_control)
 {
 	struct max_capi_spi_priv *spi_priv;
@@ -1155,7 +1155,7 @@ int max_capi_spi_set_cs(struct capi_spi_device *device,
 	return 0;
 }
 
-void max_capi_spi_isr(void *handle)
+static void max_capi_spi_isr(void *handle)
 {
 	struct capi_spi_controller_handle *spi_handle;
 	struct max_capi_spi_priv *spi_priv;

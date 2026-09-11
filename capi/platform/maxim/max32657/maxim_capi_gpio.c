@@ -44,7 +44,7 @@ static void _max_capi_gpio_set_enable(mxc_gpio_regs_t *regs, uint32_t mask,
  * @param config - the GPIO port configuration
  * @return 0 if successful, negative error code otherwise
  */
-int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
+static int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 			    const struct capi_gpio_port_config *config)
 {
 	int ret;
@@ -127,7 +127,7 @@ free_handle:
  * @param handle - the GPIO port handle
  * @return 0 if successful, negative error code otherwise
  */
-int max_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
+static int max_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
 {
 	const struct max_capi_gpio_port_priv *gpio_priv;
 	uint8_t id;
@@ -155,7 +155,7 @@ int max_capi_gpio_port_deinit(struct capi_gpio_port_handle **handle)
  * @param direction_bitmask - Direction bitmask (1=input, 0=output)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
 				     uint64_t direction_bitmask)
 {
 	struct max_capi_gpio_port_priv *priv;
@@ -197,7 +197,7 @@ int max_capi_gpio_port_set_direction(struct capi_gpio_port_handle *handle,
  * @param direction_bitmask - pointer to where the bitmask will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_get_direction(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_get_direction(struct capi_gpio_port_handle *handle,
 				     uint64_t *direction_bitmask)
 {
 	const struct max_capi_gpio_port_priv *priv;
@@ -218,7 +218,7 @@ int max_capi_gpio_port_get_direction(struct capi_gpio_port_handle *handle,
  * @param value_bitmask - the value bitmask
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle *handle,
 				     uint64_t value_bitmask)
 {
 	struct max_capi_gpio_port_priv *priv;
@@ -245,7 +245,7 @@ int max_capi_gpio_port_set_raw_value(struct capi_gpio_port_handle *handle,
  * @param value_bitmask - pointer to where the value bitmask will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle *handle,
 				     uint64_t *value_bitmask)
 {
 	struct max_capi_gpio_port_priv *priv;
@@ -269,7 +269,7 @@ int max_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle *handle,
  * @param value_bitmask - the value bitmask
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_set_value(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_set_value(struct capi_gpio_port_handle *handle,
 				 uint64_t value_bitmask)
 {
 	return max_capi_gpio_port_set_raw_value(handle, value_bitmask);
@@ -281,7 +281,7 @@ int max_capi_gpio_port_set_value(struct capi_gpio_port_handle *handle,
  * @param value_bitmask - pointer to where the value bitmask will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
 				 uint64_t *value_bitmask)
 {
 	return max_capi_gpio_port_get_raw_value(handle, value_bitmask);
@@ -293,7 +293,7 @@ int max_capi_gpio_port_get_value(struct capi_gpio_port_handle *handle,
  * @param direction - the direction to set the pin to
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
+static int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
 				    uint8_t direction)
 {
 	struct max_capi_gpio_port_priv *priv;
@@ -339,7 +339,7 @@ int max_capi_gpio_pin_set_direction(struct capi_gpio_pin *pin,
  * @param direction - pointer to where the direction will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_get_direction(struct capi_gpio_pin *pin,
+static int max_capi_gpio_pin_get_direction(struct capi_gpio_pin *pin,
 				    uint8_t *direction)
 {
 	const struct max_capi_gpio_port_priv *priv;
@@ -366,7 +366,7 @@ int max_capi_gpio_pin_get_direction(struct capi_gpio_pin *pin,
  * @param value - the value (CAPI_GPIO_LOW or CAPI_GPIO_HIGH)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin, uint8_t value)
+static int max_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin, uint8_t value)
 {
 	struct max_capi_gpio_port_priv *priv;
 
@@ -403,7 +403,7 @@ int max_capi_gpio_pin_set_raw_value(struct capi_gpio_pin *pin, uint8_t value)
  * @param value - pointer to where value will be stored
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_get_raw_value(struct capi_gpio_pin *pin, uint8_t *value)
+static int max_capi_gpio_pin_get_raw_value(struct capi_gpio_pin *pin, uint8_t *value)
 {
 	struct max_capi_gpio_port_priv *priv;
 
@@ -458,7 +458,7 @@ static inline uint8_t to_raw_value(uint8_t logical_value, uint32_t flags)
  * @param value - the value (CAPI_GPIO_LOW or CAPI_GPIO_HIGH)
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_set_value(struct capi_gpio_pin *pin, uint8_t value)
+static int max_capi_gpio_pin_set_value(struct capi_gpio_pin *pin, uint8_t value)
 {
 	uint8_t raw_value;
 
@@ -476,7 +476,7 @@ int max_capi_gpio_pin_set_value(struct capi_gpio_pin *pin, uint8_t value)
  * @param value - pointer where to store the value
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_get_value(struct capi_gpio_pin *pin, uint8_t *value)
+static int max_capi_gpio_pin_get_value(struct capi_gpio_pin *pin, uint8_t *value)
 {
 	uint8_t raw_value;
 	int ret;
@@ -499,7 +499,7 @@ int max_capi_gpio_pin_get_value(struct capi_gpio_pin *pin, uint8_t *value)
  * @param pins_bitmask - bitmask of pins to toggle
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
+static int max_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
 			      uint64_t pins_bitmask)
 {
 	struct max_capi_gpio_port_priv *priv;
@@ -522,7 +522,7 @@ int max_capi_gpio_port_toggle(struct capi_gpio_port_handle *handle,
  * @param pin - the GPIO pin
  * @return 0 on success, negative error code otherwise
  */
-int max_capi_gpio_pin_toggle(struct capi_gpio_pin *pin)
+static int max_capi_gpio_pin_toggle(struct capi_gpio_pin *pin)
 {
 	struct max_capi_gpio_port_priv *priv;
 
