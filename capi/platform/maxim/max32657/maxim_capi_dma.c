@@ -27,6 +27,8 @@
 #define MAX_DMA_DIRECT_ALIAS(name)
 #endif /* CONFIG_CAPI_DMA_DIRECT_API */
 
+/** Static variables **********************************************************/
+
 static struct capi_dma_handle *dma;
 
 /** Forward declaration *******************************************************/

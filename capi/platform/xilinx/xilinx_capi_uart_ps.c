@@ -31,6 +31,7 @@
 #else
 #define XILINX_UART_PS_DIRECT_ALIAS(name)
 #endif /* CONFIG_CAPI_UART_DIRECT_API && CONFIG_CAPI_UART_XILINX_DIRECT_PS */
+
 #ifdef XPAR_XUARTPS_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */

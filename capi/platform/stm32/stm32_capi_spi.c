@@ -20,6 +20,7 @@
 #else
 #define STM32_SPI_DIRECT_ALIAS(name)
 #endif /* CONFIG_CAPI_SPI_DIRECT_API */
+
 #ifdef HAL_TIM_MODULE_ENABLED
 #include "capi_timer.h"
 #endif

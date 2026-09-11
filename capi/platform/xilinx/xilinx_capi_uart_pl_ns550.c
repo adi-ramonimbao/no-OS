@@ -36,6 +36,7 @@
 #else
 #define XILINX_UART_PL_NS550_DIRECT_ALIAS(name)
 #endif /* CONFIG_CAPI_UART_DIRECT_API && CONFIG_CAPI_UART_XILINX_DIRECT_PL_NS550 */
+
 #ifdef XPAR_XUARTNS550_NUM_INSTANCES
 
 /* Common UART reset/default line coding used when the caller does not provide one. */
