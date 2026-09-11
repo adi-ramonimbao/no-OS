@@ -31,8 +31,6 @@ struct max_capi_irq_extra_config {
 	uint32_t default_priority;
 };
 
-extern const struct capi_irq_ops max_capi_irq_ops;
-
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus*/
