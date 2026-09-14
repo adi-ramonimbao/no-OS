@@ -77,10 +77,44 @@ set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_C ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_CXX ".elf")
 
+# CPU/FPU flags are target-aware. The MAX32657 is a Cortex-M33 (Armv8-M with
+# the FPv5 single-precision FPU); every other supported Maxim part in this file
+# is a Cortex-M4. Selecting the wrong core is not merely a missed optimisation:
+# TrustZone/CMSE (-mcmse, below) requires Armv8-M, so the M33 flags are a hard
+# prerequisite for the secure/non-secure split. -mno-unaligned-access matches
+# the Maxim SDK's own MAX32657 build (Armv8-M without the Main Extension traps
+# unaligned access; the SDK plays it safe and the startup code sets UNALIGN_TRP).
+if(TARGET_NUM STREQUAL "32657")
+    set(COMMON_CPU_FLAGS "-mthumb -mcpu=cortex-m33 -mfloat-abi=softfp -mfpu=fpv5-sp-d16 -mno-unaligned-access")
+else()
+    set(COMMON_CPU_FLAGS "-mthumb -mcpu=cortex-m4 -mfloat-abi=softfp -mfpu=fpv4-sp-d16")
+endif()
+
+# TrustZone security context for this build tree. MSECURITY_MODE is unset for an
+# ordinary single-image build (today's behaviour, unchanged), SECURE for the
+# secure half of a TrustZone build, and NONSECURE for the non-secure half. Only
+# the secure side compiles with -mcmse (which sets __ARM_FEATURE_CMSE==3 and
+# activates the SAU/veneer code paths); the non-secure side must NOT get it.
+# Each side also links against a different linker script (see the linker flags
+# below): <target>_s.ld / <target>_ns.ld, versus the plain <target>.ld default.
+set(TZ_CMSE_FLAGS "")
+set(LINKER_SCRIPT_SUFFIX "")
+if(DEFINED MSECURITY_MODE)
+    if(MSECURITY_MODE STREQUAL "SECURE")
+        set(TZ_CMSE_FLAGS "-mcmse")
+        set(LINKER_SCRIPT_SUFFIX "_s")
+    elseif(MSECURITY_MODE STREQUAL "NONSECURE")
+        set(LINKER_SCRIPT_SUFFIX "_ns")
+    else()
+        message(FATAL_ERROR
+            "MSECURITY_MODE='${MSECURITY_MODE}' is invalid. "
+            "Use SECURE, NONSECURE, or leave it unset for a single-image build.")
+    endif()
+endif()
+
 # Common flags for all build types
-set(COMMON_CPU_FLAGS "-mthumb -mcpu=cortex-m4 -mfloat-abi=softfp -mfpu=fpv4-sp-d16")
-set(CMAKE_C_FLAGS "${COMMON_CPU_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C compiler flags" FORCE)
-set(CMAKE_CXX_FLAGS "${COMMON_CPU_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C++ compiler flags" FORCE)
+set(CMAKE_C_FLAGS "${COMMON_CPU_FLAGS} ${TZ_CMSE_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C compiler flags" FORCE)
+set(CMAKE_CXX_FLAGS "${COMMON_CPU_FLAGS} ${TZ_CMSE_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C++ compiler flags" FORCE)
 set(CMAKE_ASM_FLAGS "${COMMON_CPU_FLAGS} -x assembler-with-cpp" CACHE STRING "ASM compiler flags" FORCE)
 
 # Debug build flags - Full debug info, no optimization
@@ -103,9 +137,13 @@ set(CMAKE_C_FLAGS_MINSIZEREL "-Os -DNDEBUG" CACHE STRING "C compiler flags for M
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG" CACHE STRING "C++ compiler flags for MinSizeRel" FORCE)
 set(CMAKE_ASM_FLAGS_MINSIZEREL "" CACHE STRING "ASM compiler flags for MinSizeRel" FORCE)
 
-# Linker flags (common for all build types)
-set(CMAKE_EXE_LINKER_FLAGS "${COMMON_CPU_FLAGS} -specs=nosys.specs -Wl,--gc-sections,--undefined=_sbrk ${MCU_LINKER_FLAGS} \
-    -T${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX${TARGET_NUM}/Source/GCC/${TARGET}.ld --entry=Reset_Handler" CACHE STRING "Linker flags for MCU" FORCE)
+# Linker flags (common for all build types). LINKER_SCRIPT_SUFFIX selects the
+# secure (_s) / non-secure (_ns) linker script for TrustZone builds and is empty
+# for the default single-image build, so the resolved path is <target>.ld,
+# <target>_s.ld, or <target>_ns.ld. -mcmse is carried onto the secure link too
+# (empty otherwise) so gcc selects the CMSE-aware spec.
+set(CMAKE_EXE_LINKER_FLAGS "${COMMON_CPU_FLAGS} ${TZ_CMSE_FLAGS} -specs=nosys.specs -Wl,--gc-sections,--undefined=_sbrk ${MCU_LINKER_FLAGS} \
+    -T${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX${TARGET_NUM}/Source/GCC/${TARGET}${LINKER_SCRIPT_SUFFIX}.ld --entry=Reset_Handler" CACHE STRING "Linker flags for MCU" FORCE)
 
 # Work around a Ninja restat bug with arm-none-eabi-gcc: on link failure the
 # toolchain deletes the output .elf, and Ninja restat then reports success

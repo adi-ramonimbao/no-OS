@@ -150,6 +150,14 @@
 				"BOARD_CONFIG_FILE": "max32657evkit_defconfig",
 				"OPENOCD_INTERFACE": "interface/jlink.cfg"
 			}
+		},
+		{
+			"name": "max32657evkit-tz",
+			"description": "MAX32657 EvKit board, TrustZone (Secure outer build)",
+			"inherits": "max32657evkit",
+			"cacheVariables": {
+				"MSECURITY_MODE": "SECURE"
+			}
 		}
 	]
 }

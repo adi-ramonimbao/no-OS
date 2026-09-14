@@ -19,8 +19,18 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#if !defined(CONFIG_TRUSTED_EXECUTION_SECURE) || (CONFIG_TRUSTED_EXECUTION_SECURE != 1)
-#error "CONFIG_TRUSTED_EXECUTION_SECURE must be defined and set to 1."
+/*
+ * CONFIG_TRUSTED_EXECUTION_SECURE must be defined by the build so the memory
+ * map (secure vs non-secure alias, see max32657/memory_layout.cmake) is
+ * unambiguous. It is 1 for a single-image (all-Secure) build and for the Secure
+ * half of a TrustZone build, and 0 for the Non-Secure half. The value 0 is
+ * legitimate: once the Secure world hands a peripheral over with
+ * MXC_SPC_SetNonSecure(), the same MXC drivers this backend wraps run in the
+ * Non-Secure world (see projects/max32657_tz_hello). Only an undefined symbol
+ * is an error.
+ */
+#if !defined(CONFIG_TRUSTED_EXECUTION_SECURE)
+#error "CONFIG_TRUSTED_EXECUTION_SECURE must be defined (0 or 1)."
 #endif
 
 /**
