@@ -75,6 +75,7 @@ static const struct capi_uart_config uart_config = {
 int main(void)
 {
 	struct capi_uart_handle *uart = NULL;
+	bool tx_complete = false;
 	int ret;
 
 	/* The UART is IRQ-driven, so bring up the CAPI IRQ controller first. */
@@ -94,9 +95,13 @@ int main(void)
 	printf("Currently in the Secure world.\n\r");
 	printf("Beginning transition to the Non-Secure world.\n\r");
 
-	/* Let the UART drain before handing it to the Non-Secure world. */
-	while (MXC_UART_GetActive(MXC_UART_GET_UART(0)) == E_BUSY)
-		;
+	/* Let the UART finish transmitting before handing it to the Non-Secure
+	 * world. CAPI equivalent of polling the hardware TX-busy flag:
+	 * irq_tx_complete reports true once the TX FIFO is empty and the shift
+	 * register is idle. */
+	do {
+		ret = capi_uart_irq_tx_complete(uart, &tx_complete);
+	} while (!ret && !tx_complete);
 
 	/* Expose the flash code region as Non-Secure Callable so the
 	 * IncrementCount_S() veneer can be called from Non-Secure code. */
