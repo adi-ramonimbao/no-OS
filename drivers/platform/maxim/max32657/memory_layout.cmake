@@ -14,14 +14,10 @@
 # selects (max32657.ld / max32657_s.ld / max32657_ns.ld) or the C headers and
 # the linker will disagree on the memory map.
 
-# Physical memory settings
-set(PHY_FLASH_START 0x01000000)
-set(PHY_FLASH_SIZE  0x00100000) # 1 MiB
-set(PHY_SRAM_START  0x20000000)
-set(PHY_SRAM_SIZE   0x00040000) # 256 KiB
-
-# Secure alias bit (bit 28).
-math(EXPR SECURE_BIT "1 << 28" OUTPUT_FORMAT HEXADECIMAL)
+# Physical memory map (documented for reference; each layout below hardcodes
+# the bases/sizes it commits to). Secure alias = physical base | (1 << 28).
+#   Flash: 0x01000000, 0x00100000 (1 MiB)
+#   SRAM:  0x20000000, 0x00040000 (256 KiB)
 
 if(DEFINED MSECURITY_MODE AND MSECURITY_MODE STREQUAL "SECURE")
 	# Secure Flash: first half of physical Flash, minus the top 0x2000 that
@@ -38,10 +34,10 @@ elseif(DEFINED MSECURITY_MODE AND MSECURITY_MODE STREQUAL "NONSECURE")
 	set(__MXC_SRAM_MEM_SIZE  0x00020000)
 else()
 	# Default single-image build: whole physical memory, Secure alias set.
-	math(EXPR __MXC_FLASH_MEM_BASE "${PHY_FLASH_START} | ${SECURE_BIT}" OUTPUT_FORMAT HEXADECIMAL)
-	math(EXPR __MXC_SRAM_MEM_BASE "${PHY_SRAM_START} | ${SECURE_BIT}" OUTPUT_FORMAT HEXADECIMAL)
-	set(__MXC_FLASH_MEM_SIZE ${PHY_FLASH_SIZE})
-	set(__MXC_SRAM_MEM_SIZE ${PHY_SRAM_SIZE})
+	set(__MXC_FLASH_MEM_BASE 0x11000000)
+	set(__MXC_FLASH_MEM_SIZE 0x00100000)
+	set(__MXC_SRAM_MEM_BASE  0x30000000)
+	set(__MXC_SRAM_MEM_SIZE  0x00040000)
 endif()
 
 add_compile_definitions(
