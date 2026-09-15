@@ -118,18 +118,21 @@ its include path, matching the MSDK example.
 Build
 -----
 
-Configure with the plain ``max32657evkit`` preset and point ``MAXIM_LIBRARIES``
-at your MSDK ``Libraries`` directory. The project ships a ``trustzone.cmake``
-marker, so the outer tree is placed in the Secure world
-(``MSECURITY_MODE=SECURE``) automatically - no extra flag is needed. Building the
-``max32657_tz_hello`` target runs the whole superbuild - the nested Non-Secure
-build, the two Secure links and the embed - automatically.
+Point the build at your MSDK by exporting ``MAXIM_LIBRARIES`` (or provide a CFS
+install via ``CFS_PATH``); the Maxim toolchain reads the SDK location from the
+environment, not from a ``-D`` cache variable. Then configure with the plain
+``max32657evkit`` preset. The project ships a ``trustzone.cmake`` marker, so the
+outer tree is placed in the Secure world (``MSECURITY_MODE=SECURE``)
+automatically - no extra flag is needed. Building the ``max32657_tz_hello``
+target runs the whole superbuild - the nested Non-Secure build, the two Secure
+links and the embed - automatically (the nested build inherits ``MAXIM_LIBRARIES``
+from this environment).
 
 .. code-block:: bash
 
+	export MAXIM_LIBRARIES=/path/to/msdk/Libraries
 	cmake --preset max32657evkit -B build \
-	    -DPROJECT_DEFCONFIG=max32657_tz_hello/secure.conf \
-	    -DMAXIM_LIBRARIES=/path/to/msdk/Libraries
+	    -DPROJECT_DEFCONFIG=max32657_tz_hello/secure.conf
 	cmake --build build --target max32657_tz_hello
 
 Artifacts land in ``build/build/``:

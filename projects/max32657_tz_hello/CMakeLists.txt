@@ -9,10 +9,11 @@
 #
 # The outer build must run in the Secure world (MSECURITY_MODE=SECURE); that is
 # set automatically by trustzone.cmake in this directory, so the plain board
-# preset works:
+# preset works. The SDK location comes from the environment (MAXIM_LIBRARIES or
+# CFS), not a -D cache var:
+#   export MAXIM_LIBRARIES=/path/to/msdk/Libraries
 #   cmake --preset max32657evkit -B build \
-#         -DPROJECT_DEFCONFIG=max32657_tz_hello/secure.conf \
-#         -DMAXIM_LIBRARIES=/path/to/msdk/Libraries
+#         -DPROJECT_DEFCONFIG=max32657_tz_hello/secure.conf
 #   cmake --build build --target max32657_tz_hello
 # =============================================================================
 

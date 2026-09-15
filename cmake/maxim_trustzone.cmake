@@ -151,10 +151,16 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
         COMMENT "secure_implib.o emitted via --out-implib")
 
     # ---- 3. Nested Non-Secure build -> nonsecure.bin -------------------------
+    # The SDK location is NOT a -D cache var: drivers/platform/maxim/toolchain.cmake
+    # resolves MAXIM_LIBRARIES only from CFS or the MAXIM_LIBRARIES *environment*
+    # variable. Pass the parent's already-resolved path to the nested configure
+    # through the environment (via `cmake -E env`) so it works whether the parent
+    # got it from CFS or from $MAXIM_LIBRARIES.
     add_custom_command(
         OUTPUT ${_ns_bin}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_ns_build_dir}
-        COMMAND ${CMAKE_COMMAND}
+        COMMAND ${CMAKE_COMMAND} -E env "MAXIM_LIBRARIES=${MAXIM_LIBRARIES}"
+            ${CMAKE_COMMAND}
             -S ${CMAKE_SOURCE_DIR} -B ${_ns_build_dir} -G ${CMAKE_GENERATOR}
             -DPLATFORM=${PLATFORM}
             -DBOARD=${BOARD}
@@ -162,7 +168,6 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
             -DTARGET_NUM=${TARGET_NUM}
             -DBOARD_CONFIG_FILE=${BOARD_CONFIG_FILE}
             -DUSE_VENDOR_TOOLCHAIN=${USE_VENDOR_TOOLCHAIN}
-            -DMAXIM_LIBRARIES=${MAXIM_LIBRARIES}
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
             -DMSECURITY_MODE=NONSECURE
             -DPROJECT_DEFCONFIG=${TZ_NONSECURE_CONF}
