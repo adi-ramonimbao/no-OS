@@ -84,7 +84,9 @@ project is therefore a **superbuild**: the outer (Secure) build drives a nested
 behaviour), selects the memory layout, the linker script and ``-mcmse`` per
 tree.
 
-The dependency chain (in ``CMakeLists.txt``) mirrors the MSDK ``max32657.mk``:
+The superbuild is provided by the reusable ``no_os_add_maxim_trustzone_app()``
+framework (``cmake/maxim_trustzone.cmake``); the project's ``CMakeLists.txt`` just
+declares its sources. Its dependency chain mirrors the MSDK ``max32657.mk``:
 
 #. **Compile** the Secure objects with ``-mcmse`` and ``max32657_s.ld``
    (``__ARM_FEATURE_CMSE == 3`` activates the SAU/veneer code paths in the MSDK
@@ -116,15 +118,16 @@ its include path, matching the MSDK example.
 Build
 -----
 
-Configure the **outer (Secure)** tree with the ``max32657evkit-tz`` preset
-(which sets ``MSECURITY_MODE=SECURE``) and point ``MAXIM_LIBRARIES`` at your
-MSDK ``Libraries`` directory. Building the ``max32657_tz_hello`` target runs the
-whole superbuild - the nested Non-Secure build, the two Secure links and the
-embed - automatically.
+Configure with the plain ``max32657evkit`` preset and point ``MAXIM_LIBRARIES``
+at your MSDK ``Libraries`` directory. The project ships a ``trustzone.cmake``
+marker, so the outer tree is placed in the Secure world
+(``MSECURITY_MODE=SECURE``) automatically - no extra flag is needed. Building the
+``max32657_tz_hello`` target runs the whole superbuild - the nested Non-Secure
+build, the two Secure links and the embed - automatically.
 
 .. code-block:: bash
 
-	cmake --preset max32657evkit-tz -B build \
+	cmake --preset max32657evkit -B build \
 	    -DPROJECT_DEFCONFIG=max32657_tz_hello/secure.conf \
 	    -DMAXIM_LIBRARIES=/path/to/msdk/Libraries
 	cmake --build build --target max32657_tz_hello
@@ -172,11 +175,11 @@ Layout
 ::
 
 	projects/max32657_tz_hello/
-	├── CMakeLists.txt          # superbuild driver (two-tree, two-pass link)
+	├── CMakeLists.txt          # minimal: calls no_os_add_maxim_trustzone_app()
+	├── trustzone.cmake         # marker: build Secure world (MSECURITY_MODE=SECURE)
 	├── Kconfig
 	├── secure.conf             # Secure-world defconfig (console UART)
 	├── nonsecure.conf          # Non-Secure-world defconfig (UART/GPIO/TIME)
-	├── nonsecure_load.S.in     # .incbin stub template (embeds nonsecure.bin)
 	├── README.rst
 	└── src/
 	    ├── secure/
