@@ -1,10 +1,10 @@
 # =============================================================================
-# no_os_add_maxim_trustzone_app() - reusable MAX32657 TrustZone superbuild.
+# no_os_add_maxim_trustzone_app() - reusable Maxim (Armv8-M / CMSE) TrustZone
+# superbuild.
 #
 # Produces a SINGLE combined ELF holding both the Secure and Non-Secure worlds,
-# mirroring the MSDK Hello_World_TZ make flow (max32657.mk) in CMake. A project
-# supplies only its sources/includes; this module drives the whole two-tree
-# superbuild:
+# mirroring the MSDK Hello_World_TZ make flow in CMake. A project supplies only
+# its sources/includes; this module drives the whole two-tree superbuild:
 #
 #   1. Compile the Secure objects (-mcmse, MSECURITY_MODE=SECURE).
 #   2. Pass-A link -> secure_implib.o        (--cmse-implib, no NS image)
@@ -14,12 +14,19 @@
 #
 # Two build trees are required because the Maxim toolchain fixes the CPU flags,
 # -mcmse, and the -T<linker script> globally per build tree (forced cache vars
-# in drivers/platform/maxim/toolchain.cmake). Secure needs -mcmse + max32657_s.ld;
-# Non-Secure needs neither + max32657_ns.ld. So the SECURE tree (the outer build)
+# in drivers/platform/maxim/toolchain.cmake). Secure is built with -mcmse and
+# links <target>_s.ld; Non-Secure is built without -mcmse and links
+# <target>_ns.ld. So the SECURE tree (the outer build)
 # drives a nested NON-SECURE tree and relinks the result into itself. The same
 # call also handles the nested NON-SECURE tree (entered when the root is
 # reconfigured with MSECURITY_MODE=NONSECURE by step 3), so a project calls this
 # exactly once and this module dispatches on MSECURITY_MODE.
+#
+# The module is part-agnostic: it hardcodes no specific device. A Maxim part is
+# usable with it when its MSDK TrustZone linker scripts follow the standard
+# convention -- <target>_s.ld places section .nonsecure_flash and pins
+# KEEP(*nonsecure.o) there. MAX32657 is the only Maxim part wired for TrustZone
+# today and is the reference example used throughout these comments.
 #
 # The outer build must be configured with MSECURITY_MODE=SECURE. A project
 # declares this without a preset via a projects/<name>/trustzone.cmake marker
@@ -29,7 +36,7 @@
 #   include(maxim_trustzone)
 #   no_os_add_maxim_trustzone_app(<name>
 #       SECURE_SRC     src/secure/main.c
-#       SECURE_INC     src/secure            # dir holding partition_max32657.h
+#       SECURE_INC     src/secure            # dir holding partition_<target>.h
 #       NONSECURE_SRC  src/nonsecure/main.c
 #       NONSECURE_INC  src/nonsecure
 #       [SECURE_CONF    secure.conf]         # default <name>/secure.conf
@@ -121,9 +128,9 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
     set(_gen_loader_s  ${CMAKE_CURRENT_BINARY_DIR}/nonsecure_load.S)
     set(_ns_conf_abs   ${CMAKE_SOURCE_DIR}/projects/${TZ_NONSECURE_CONF})
 
-    # system_max32657.c (compiled into no-os) includes partition_max32657.h under
-    # -mcmse (__ARM_FEATURE_CMSE==3): the Secure app's SAU config. Expose the
-    # Secure include dirs to no-os for this (Secure) tree.
+    # The platform's system_<target>.c (compiled into no-os) includes
+    # partition_<target>.h under -mcmse (__ARM_FEATURE_CMSE==3): the Secure app's
+    # SAU config. Expose the Secure include dirs to no-os for this (Secure) tree.
     if(_secure_inc)
         target_include_directories(no-os PRIVATE ${_secure_inc})
     endif()
@@ -201,9 +208,9 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
     # ---- 6. Post-build / flash on the single combined ELF -------------------
     # The generic post_build_config() is deliberately NOT used: it runs
     # `objcopy -O binary`, which zero-fills the huge gap between the Non-Secure
-    # alias region (.nonsecure_flash @ 0x01080000) and the Secure alias region
-    # (.text @ 0x11000000) -> a multi-hundred-MB .bin. The Intel HEX carries
-    # per-region address records, so it stays small and is the flashable artifact.
+    # alias region (.nonsecure_flash, MAX32657 @ 0x01080000) and the Secure alias
+    # region (.text, @ 0x11000000) -> a multi-hundred-MB .bin. The Intel HEX
+    # carries per-region address records, so it stays small and is flashable.
     config_platform_sdk(${APP_NAME})
     generate_openocd_config()
     add_flash_target(${APP_NAME})
