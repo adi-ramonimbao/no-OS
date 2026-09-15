@@ -23,15 +23,9 @@
 #include "capi_uart.h"
 #include "capi_gpio.h"
 #include "capi_time.h"
-#include "capi_irq.h"
 #include "maxim_capi_uart.h"
 
 #include "parameters.h"
-
-static struct capi_irq_config irq_config = {
-	.irq_ctrl_id = IRQ_CTRL_IDENTIFIER,
-	.extra = IRQ_CTRL_EXTRA,
-};
 
 /* Secure gateway, resolved from secure_implib.o. */
 extern int IncrementCount_S(volatile int *count_ns);
@@ -73,12 +67,6 @@ int main(void)
 	struct capi_gpio_pin led;
 	volatile int count = 0;
 	int ret;
-
-	/* The UART is IRQ-driven, so bring up the CAPI IRQ controller first. */
-	ret = capi_irq_init(&irq_config);
-	if (ret)
-		return ret;
-	capi_irq_global_enable();
 
 	ret = capi_uart_init(&uart, &uart_config);
 	if (ret)
