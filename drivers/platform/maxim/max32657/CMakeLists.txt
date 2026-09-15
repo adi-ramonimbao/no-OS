@@ -84,15 +84,6 @@ target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX32657/Sour
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX32657/Source/heap.c)
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX32657/Source/system_max32657.c)
 
-# Heap size for the newlib allocator. startup_max32657.S reserves the .heap
-# region from Heap_Size, which defaults to only 0xC00 (3 KiB) unless __HEAP_SIZE
-# is defined. That default is far too small for a no-OS/CAPI application: newlib's
-# full stdio (pulled in by printf/setvbuf) plus the CAPI handle allocations
-# (capi_calloc) exhaust it and capi_*_init() then fails with -ENOMEM (-12). The
-# part has 256 KiB SRAM, so give the heap real headroom. Applies to the plain
-# single-image build and to both halves of a TrustZone build.
-target_compile_definitions(no-os PUBLIC -D__HEAP_SIZE=0x00008000)
-
 target_compile_definitions(no-os PUBLIC -DTARGET_NUM=32657)
 target_compile_definitions(no-os PUBLIC -DTARGET=32657)
 
