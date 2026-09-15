@@ -5,7 +5,7 @@
 #   unset      Single Secure image (default, unchanged behaviour): the whole
 #              physical Flash/SRAM with the Secure alias bit set on the bases.
 #   SECURE     Secure half of a TrustZone build: Secure Flash 0x11000000 sized
-#              to leave the top 0x2000 for the Non-Secure Callable (NSC) region,
+#              to leave the top 0x8000 for the Non-Secure Callable (NSC) region,
 #              Secure SRAM 0x30000000.
 #   NONSECURE  Non-Secure half: Non-Secure Flash 0x01080000, Non-Secure SRAM
 #              0x20020000 (bit 28 clear).
@@ -20,8 +20,10 @@
 #   SRAM:  0x20000000, 0x00040000 (256 KiB)
 
 if(DEFINED MSECURITY_MODE AND MSECURITY_MODE STREQUAL "SECURE")
-	# Secure Flash: first half of physical Flash, minus the top 0x2000 that
-	# max32657_s.ld reserves for the NSC region (.gnu.sgstubs / SG veneers).
+	# Secure Flash: first half of physical Flash (0x80000), minus the top
+	# 0x8000 that max32657_s.ld reserves for the NSC region (NSC_REGION @
+	# 0x11078000, LENGTH 0x8000; holds .gnu.sgstubs / SG veneers).
+	# 0x78000 + 0x8000 = 0x80000.
 	set(__MXC_FLASH_MEM_BASE 0x11000000)
 	set(__MXC_FLASH_MEM_SIZE 0x00078000)
 	set(__MXC_SRAM_MEM_BASE  0x30000000)
