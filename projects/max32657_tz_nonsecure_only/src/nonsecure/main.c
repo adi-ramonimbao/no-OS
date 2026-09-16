@@ -6,17 +6,18 @@
 
 /**
  * @file   main.c
- * @brief  Non-Secure-world application for the MAX32657 TrustZone hello demo.
+ * @brief  Non-Secure-world consumer for the MAX32657 TrustZone split demo.
  *
- * Reached from the Secure world via NonSecure_Init(). Runs an ordinary no-OS
- * CAPI application on the peripherals the Secure world handed over: it prints
- * over the CAPI UART, blinks the board LED through CAPI GPIO, and on every
- * iteration calls back into the Secure world through the IncrementCount_S()
- * gateway to advance a counter that lives in Non-Secure memory.
+ * Built on its own (Non-Secure-only) and merged with a Secure image produced
+ * elsewhere (max32657_tz_secure_only). Reached from the Secure world via
+ * NonSecure_Init(), it runs an ordinary no-OS CAPI application on the delegated
+ * peripherals: prints over the CAPI UART, blinks the board LED through CAPI
+ * GPIO, and on every iteration calls back into the Secure world through the
+ * gateway veneers.
  *
- * IncrementCount_S() is resolved at link time from the Secure import library
- * (secure_implib.o); the call lands on the SG veneer in the Non-Secure
- * Callable region and transitions into Secure state.
+ * IncrementCount_S() / GetSecureMagic_S() are resolved at link time from the
+ * Secure import library (passed as SECURE_IMPLIB); each call lands on an SG
+ * veneer in the Non-Secure Callable region and transitions into Secure state.
  */
 
 #include <stdio.h>
@@ -29,8 +30,9 @@
 
 #include "parameters.h"
 
-/* Secure gateway, resolved from secure_implib.o. */
+/* Secure gateways, resolved from the Secure import library. */
 extern int IncrementCount_S(volatile int *count_ns);
+extern uint32_t GetSecureMagic_S(void);
 
 static struct capi_uart_line_config uart_line_config = {
 	.baudrate = UART_BAUDRATE,
@@ -90,6 +92,8 @@ int main(void)
 		return ret;
 
 	printf("Hello from the Non-Secure world (no-OS CAPI)!\n\r");
+	/* Read a Secure-owned constant across the boundary (S -> NS return path). */
+	printf("Secure magic = 0x%08lX\n\r", (unsigned long)GetSecureMagic_S());
 
 	while (1) {
 		capi_gpio_pin_toggle(&led);

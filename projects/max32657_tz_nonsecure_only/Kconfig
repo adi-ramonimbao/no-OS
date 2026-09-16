@@ -1,0 +1,7 @@
+menu "max32657_tz_nonsecure_only Configuration"
+
+comment "Non-Secure-only TrustZone consumer: no build-time options. Links"
+comment "against a Secure image built elsewhere (max32657_tz_secure_only) and"
+comment "merges the two into one flashable HEX. See the project README."
+
+endmenu

@@ -6,20 +6,24 @@
 
 /**
  * @file   main.c
- * @brief  Secure-world entry for the MAX32657 TrustZone hello demo.
+ * @brief  Secure-world entry for the MAX32657 TrustZone CAPI self-test.
  *
- * Ported from msdk/Examples/MAX32657/Hello_World_TZ/Secure/main.c into the
- * no-OS CAPI structure. The Secure world:
+ * The Secure world:
  *   1. brings up the console UART through CAPI and prints a banner,
- *   2. exposes the flash code region as Non-Secure Callable so the
- *      IncrementCount_S() veneer is reachable from the Non-Secure world,
+ *   2. exposes the flash code region as Non-Secure Callable so the secure
+ *      gateway veneers are reachable from the Non-Secure world,
  *   3. hands GPIO0 / GCR / UART to the Non-Secure world via the SPC,
  *   4. branches into the Non-Secure image with NonSecure_Init().
  *
- * IncrementCount_S() is the secure gateway (__ns_entry) the Non-Secure app
- * calls back into; it validates the caller-supplied pointer with the CMSE
- * intrinsic before dereferencing it, so a malicious Non-Secure pointer cannot
- * be used to reach Secure memory.
+ * Two secure gateways (__ns_entry) back the Non-Secure TRUSTZONE test group:
+ *
+ *   IncrementCount_S()  - validates the caller-supplied pointer with the CMSE
+ *                         intrinsic before dereferencing it, then increments the
+ *                         Non-Secure counter. A NULL or Secure-memory pointer
+ *                         fails the check and returns -EINVAL, so a hostile
+ *                         Non-Secure pointer can never reach Secure memory.
+ *   GetSecureMagic_S()  - returns a Secure-owned constant, exercising the
+ *                         Secure -> Non-Secure return path (no pointer involved).
  */
 
 #include <stdio.h>
@@ -36,6 +40,10 @@
 
 #include "parameters.h"
 
+/* This TU defines the gateways with __ns_entry; suppress the plain prototypes. */
+#define TZ_GATEWAYS_SECURE_IMPL
+#include "tz_gateways.h"
+
 /* Secure gateway called from the Non-Secure world. __ns_entry expands to
  * __attribute((cmse_nonsecure_entry)); the linker emits an SG veneer for it in
  * the Non-Secure Callable region and records it in secure_implib.o. */
@@ -51,6 +59,13 @@ __ns_entry int IncrementCount_S(volatile int *count_ns)
 	(*count_ns)++;
 
 	return 0;
+}
+
+/* Secure gateway that returns a Secure-owned value. No pointer crosses the
+ * boundary, so this exercises the plain Secure -> Non-Secure return path. */
+__ns_entry int GetSecureMagic_S(void)
+{
+	return TZ_SECURE_MAGIC;
 }
 
 static struct capi_uart_line_config uart_line_config = {
@@ -81,9 +96,8 @@ int main(void)
 	/* Route printf/stdio through the CAPI UART for the Secure banner. */
 	max_capi_uart_stdio_enable(uart);
 
-	printf("\n\r**** MAX32657 Hello World with TrustZone (no-OS CAPI) ****\n\r");
-	printf("Currently in the Secure world.\n\r");
-	printf("Beginning transition to the Non-Secure world.\n\r");
+	printf("\n\r**** MAX32657 TrustZone CAPI self-test (Secure world) ****\n\r");
+	printf("Handing peripherals to the Non-Secure world; tests run there.\n\r");
 
 	/* Let the UART finish transmitting before handing it to the Non-Secure
 	 * world. CAPI equivalent of polling the hardware TX-busy flag:
@@ -93,12 +107,14 @@ int main(void)
 		ret = capi_uart_irq_tx_complete(uart, &tx_complete);
 	} while (!ret && !tx_complete);
 
-	/* Expose the flash code region as Non-Secure Callable so the
-	 * IncrementCount_S() veneer can be called from Non-Secure code. */
+	/* Expose the flash code region as Non-Secure Callable so the gateway
+	 * veneers can be called from Non-Secure code. */
 	MXC_SPC_SetCode_NSC(true);
 
 	/* Hand the peripherals the Non-Secure app needs over to it. These are no
-	 * longer accessible from the Secure world afterwards. */
+	 * longer accessible from the Secure world afterwards. DMA0 is hardwired
+	 * Non-Secure and needs no SPC handover; it only needs its clock, which is
+	 * reachable once the GCR is Non-Secure. */
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GPIO0);
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GCR);
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_UART);

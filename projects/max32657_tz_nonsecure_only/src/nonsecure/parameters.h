@@ -6,7 +6,7 @@
 
 /**
  * @file   parameters.h
- * @brief  Non-Secure-world platform parameters for the MAX32657 TZ hello demo.
+ * @brief  Non-Secure-world platform parameters for the MAX32657 TZ consumer.
  *
  * The Non-Secure world drives the console UART and the board LED, both handed
  * over by the Secure world before the transition.

@@ -63,6 +63,129 @@ function(_no_os_tz_abspaths OUT_VAR)
     set(${OUT_VAR} "${_result}" PARENT_SCOPE)
 endfunction()
 
+# Resolve the ACTIVE Secure linker script: the generated one on the custom-memory
+# path (NO_OS_TZ_GEN_DIR set), otherwise the SDK default. Single source of truth
+# for the partition SAU table (Gate 1) and the Secure contract (§ producer).
+function(_no_os_tz_active_sld OUT_VAR)
+    if(DEFINED NO_OS_TZ_GEN_DIR)
+        set(_sld "${NO_OS_TZ_GEN_DIR}/secure/${TARGET}_s.ld")
+    else()
+        set(_sld "${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX${TARGET_NUM}/Source/GCC/${TARGET}_s.ld")
+    endif()
+    set(${OUT_VAR} "${_sld}" PARENT_SCOPE)
+endfunction()
+
+# Parse ORIGIN/LENGTH of a MEMORY region from a linker script. The region name
+# must be followed by "(" so FLASH does not also match FLASH_NS.
+function(_no_os_tz_ld_region ld name out_origin out_len)
+    file(STRINGS "${ld}" _lines REGEX "^[ \t]*${name}[ \t]*\\(")
+    if(NOT _lines OR NOT "${_lines}" MATCHES
+       "ORIGIN[ \t]*=[ \t]*(0x[0-9A-Fa-f]+).*LENGTH[ \t]*=[ \t]*(0x[0-9A-Fa-f]+)")
+        message(FATAL_ERROR "maxim_trustzone: region '${name}' not found in ${ld}")
+    endif()
+    set(${out_origin} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+    set(${out_len} "${CMAKE_MATCH_2}" PARENT_SCOPE)
+endfunction()
+
+# Gate 1: (re)generate the Secure partition_<target>.h to the no-OS SAU policy,
+# and expose the Secure include dirs to no-os (system_<target>.c, compiled into
+# no-os under -mcmse, #includes the partition). Shared by the combined superbuild
+# and the Secure-only producer so both apply the identical SAU policy. The SAU
+# region addresses come from the ACTIVE secure linker script (see above); the
+# generator writes only when the content changes (no needless recompile).
+function(_no_os_tz_prepare_secure_partition)
+    cmake_parse_arguments(P "" "" "SECURE_INC" ${ARGN})
+    if(NOT P_SECURE_INC)
+        message(FATAL_ERROR
+            "maxim_trustzone: SECURE_INC (the dir holding partition_${TARGET}.h) "
+            "is required for a Secure TrustZone build.")
+    endif()
+    target_include_directories(no-os PRIVATE ${P_SECURE_INC})
+
+    set(_tz_template "${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX${TARGET_NUM}/Source/Template/partition_${TARGET}.h")
+    _no_os_tz_active_sld(_tz_active_sld)
+    list(GET P_SECURE_INC 0 _tz_secure_dir)
+    no_os_require_path("${_tz_template}"
+        "TrustZone partition template not found: ${_tz_template}")
+    no_os_require_path("${_tz_active_sld}"
+        "TrustZone secure linker script not found: ${_tz_active_sld}")
+    no_os_run_checked(
+        WHAT "generating ${TARGET} TrustZone partition (${_tz_secure_dir}/partition_${TARGET}.h)"
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim_tz_gen_partition.py
+            --template ${_tz_template}
+            --sld ${_tz_active_sld}
+            --out ${_tz_secure_dir}/partition_${TARGET}.h)
+endfunction()
+
+# Write the Secure deliverable "contract" next to the Secure HEX: the paths a
+# Non-Secure consumer feeds to no_os_add_maxim_trustzone_nonsecure_app()
+# (SECURE_HEX / SECURE_IMPLIB) plus the Non-Secure memory map (flash/SRAM/NSC)
+# the consumer must match. Parsed from the active _s.ld so it can never drift.
+function(_no_os_tz_write_contract APP_NAME)
+    _no_os_tz_active_sld(_sld)
+    _no_os_tz_ld_region("${_sld}" FLASH_NS   _ns_flash_base _ns_flash_size)
+    _no_os_tz_ld_region("${_sld}" SRAM_NS    _ns_sram_base  _ns_sram_size)
+    _no_os_tz_ld_region("${_sld}" NSC_REGION _nsc_base      _nsc_size)
+    set(_out ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}_contract.cmake)
+    file(WRITE "${_out}"
+        "# Auto-generated Secure deliverable contract for ${APP_NAME}.\n"
+        "# Pass these to no_os_add_maxim_trustzone_nonsecure_app() and keep the\n"
+        "# Non-Secure image inside the memory map below. Paths are relative to this\n"
+        "# file (CMAKE_CURRENT_LIST_DIR), so the deliverable folder is relocatable:\n"
+        "# keep the hex/implib/tz_gen next to this contract and it works from anywhere.\n"
+        "set(TZ_SECURE_HEX    \"\${CMAKE_CURRENT_LIST_DIR}/${APP_NAME}.hex\")\n"
+        "set(TZ_SECURE_IMPLIB \"\${CMAKE_CURRENT_LIST_DIR}/${APP_NAME}_implib.o\")\n"
+        "set(TZ_NS_FLASH_ORIGIN ${_ns_flash_base})\n"
+        "set(TZ_NS_FLASH_SIZE   ${_ns_flash_size})\n"
+        "set(TZ_NS_SRAM_ORIGIN  ${_ns_sram_base})\n"
+        "set(TZ_NS_SRAM_SIZE    ${_ns_sram_size})\n"
+        "set(TZ_NSC_ORIGIN      ${_nsc_base})\n"
+        "set(TZ_NSC_SIZE        ${_nsc_size})\n")
+    # Custom split: the Secure linker-script pair IS the memory-map contract. Ship
+    # it as a first-class deliverable next to the hex/implib and point the consumer
+    # at it; the consumer links these exact scripts -- there is no regeneration
+    # downstream. A default split ships nothing (the SDK's stock _ns.ld is used).
+    if(DEFINED NO_OS_TZ_GEN_DIR)
+        set(_ship "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/tz_gen")
+        file(COPY "${NO_OS_TZ_GEN_DIR}/secure/${TARGET}_s.ld"
+            DESTINATION "${_ship}/secure")
+        file(COPY "${NO_OS_TZ_GEN_DIR}/nonsecure/${TARGET}_ns.ld"
+            DESTINATION "${_ship}/nonsecure")
+        file(APPEND "${_out}"
+            "# Custom split: the shipped linker-script pair below IS the memory-map\n"
+            "# contract; the consumer links these exact scripts (no regeneration).\n"
+            "set(NO_OS_TZ_GEN_DIR \"\${CMAKE_CURRENT_LIST_DIR}/tz_gen\" CACHE INTERNAL \"Shipped TrustZone linker scripts\")\n")
+    endif()
+    message(STATUS "TrustZone Secure contract: ${_out}")
+endfunction()
+
+# Create a `flash` target that programs a combined HEX (Secure + Non-Secure) via
+# whichever probe is configured. The generic add_flash_target() flashes the ELF
+# on OpenOCD, which for a Non-Secure-only build would carry only the Non-Secure
+# world; here the merged HEX is the deployment artifact, so program that instead.
+function(_no_os_tz_add_hex_flash_target APP_NAME HEX)
+    if(PROBE STREQUAL "jlink")
+        add_custom_target(flash
+            COMMAND "${VENV_PYTHON_EXE}" "${NO_OS_DIR}/tools/scripts/jlink.py"
+                --device "${TARGET}" --file "${HEX}"
+            DEPENDS ${APP_NAME}
+            COMMENT "Flashing ${TARGET} (combined Secure+Non-Secure)..."
+            VERBATIM)
+    elseif(OPENOCD_PATH)
+        add_custom_target(flash
+            COMMAND ${OPENOCD_PATH}
+                -s ${OPENOCD_SCRIPTS}
+                -f ${CMAKE_CURRENT_BINARY_DIR}/openocd.cfg
+                -c "program ${HEX} verify reset exit"
+            DEPENDS ${APP_NAME}
+            COMMENT "Flashing ${TARGET} (combined Secure+Non-Secure)..."
+            VERBATIM)
+    else()
+        message(STATUS
+            "No flash probe available for ${APP_NAME}; combined HEX at ${HEX}")
+    endif()
+endfunction()
+
 function(no_os_add_maxim_trustzone_app APP_NAME)
     cmake_parse_arguments(TZ
         ""                                              # options
@@ -130,10 +253,10 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
 
     # The platform's system_<target>.c (compiled into no-os) includes
     # partition_<target>.h under -mcmse (__ARM_FEATURE_CMSE==3): the Secure app's
-    # SAU config. Expose the Secure include dirs to no-os for this (Secure) tree.
-    if(_secure_inc)
-        target_include_directories(no-os PRIVATE ${_secure_inc})
-    endif()
+    # SAU config. Gate 1 regenerates it to the no-OS SAU policy from the active
+    # secure linker script and exposes the Secure include dirs to no-os. Shared
+    # with the Secure-only producer so both apply the identical policy.
+    _no_os_tz_prepare_secure_partition(SECURE_INC ${_secure_inc})
 
     # ---- 1. Secure objects, shared by both Secure links ----------------------
     # One OBJECT library so pass A (implib) and pass B (final) link byte-identical
@@ -163,6 +286,17 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
     # variable. Pass the parent's already-resolved path to the nested configure
     # through the environment (via `cmake -E env`) so it works whether the parent
     # got it from CFS or from $MAXIM_LIBRARIES.
+    #
+    # Custom TrustZone memory: the outer (Secure) tree generated the linker scripts
+    # in NO_OS_TZ_GEN_DIR; hand that dir (and the flag) to the nested tree so it links
+    # the generated <target>_ns.ld. Passed only when actually set, so an empty
+    # -DNO_OS_TZ_GEN_DIR can never make the nested toolchain treat it as defined.
+    set(_tz_ns_custom_args "")
+    if(USE_CUSTOM_MEMORY_SETTINGS AND DEFINED NO_OS_TZ_GEN_DIR)
+        list(APPEND _tz_ns_custom_args
+            -DUSE_CUSTOM_MEMORY_SETTINGS=${USE_CUSTOM_MEMORY_SETTINGS}
+            -DNO_OS_TZ_GEN_DIR=${NO_OS_TZ_GEN_DIR})
+    endif()
     add_custom_command(
         OUTPUT ${_ns_bin}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_ns_build_dir}
@@ -179,6 +313,7 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
             -DMSECURITY_MODE=NONSECURE
             -DPROJECT_DEFCONFIG=${TZ_NONSECURE_CONF}
             -DTZ_SECURE_IMPLIB=${_secure_implib}
+            ${_tz_ns_custom_args}
         COMMAND ${CMAKE_COMMAND} --build ${_ns_build_dir} --target ${APP_NAME}
         COMMAND ${CMAKE_OBJCOPY} -O binary ${_ns_elf} ${_ns_bin}
         DEPENDS ${APP_NAME}_implib ${_secure_implib} ${_nonsecure_src} ${_ns_conf_abs}
@@ -218,4 +353,183 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
         COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${APP_NAME}> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}.hex
         COMMAND ${CMAKE_COMMAND} -E echo "Binary size:" && (${CMAKE_SIZE} --format=berkeley $<TARGET_FILE:${APP_NAME}> || ${CMAKE_COMMAND} -E true)
         COMMENT "Generating ${APP_NAME}.hex (combined Secure+Non-Secure)")
+endfunction()
+
+# =============================================================================
+# no_os_add_maxim_trustzone_secure_app() - Secure-only PRODUCER.
+#
+# Builds just the Secure world and emits it as separately deliverable artifacts,
+# for the case where the Secure firmware is owned/signed/provisioned by one party
+# and the Non-Secure application is built and iterated independently by another
+# (see no_os_add_maxim_trustzone_nonsecure_app, the consumer).
+#
+# With no Non-Secure image to embed there is no Secure<->Non-Secure circular
+# dependency, so the two-pass implib dance of the combined superbuild collapses
+# to a single link: one Secure executable linked with --cmse-implib, which yields
+# both the Secure image and the import library in one step.
+#
+# Deliverables (in CMAKE_RUNTIME_OUTPUT_DIRECTORY):
+#   <name>.hex           - the Secure image (Intel HEX; .nonsecure_flash is empty)
+#   <name>_implib.o      - CMSE import library (the __ns_entry gateway addresses)
+#   <name>_contract.cmake- SECURE_HEX/SECURE_IMPLIB paths + the Non-Secure memory
+#                          map the consumer must match
+#
+# The outer build must be configured with MSECURITY_MODE=SECURE (a project ships
+# projects/<name>/trustzone.cmake to set it; -DMSECURITY_MODE=SECURE also works).
+#
+# Usage (projects/<name>/CMakeLists.txt):
+#   include(maxim_trustzone)
+#   no_os_add_maxim_trustzone_secure_app(<name>
+#       SECURE_SRC  src/secure/main.c
+#       SECURE_INC  src/secure)          # dir holding partition_<target>.h
+# =============================================================================
+function(no_os_add_maxim_trustzone_secure_app APP_NAME)
+    cmake_parse_arguments(TZ
+        ""
+        "SECURE_CONF"
+        "SECURE_SRC;SECURE_INC"
+        ${ARGN})
+
+    if(NOT TZ_SECURE_SRC)
+        message(FATAL_ERROR
+            "no_os_add_maxim_trustzone_secure_app(${APP_NAME}): SECURE_SRC is required.")
+    endif()
+    if(NOT (DEFINED MSECURITY_MODE AND MSECURITY_MODE STREQUAL "SECURE"))
+        message(FATAL_ERROR
+            "${APP_NAME} is a Secure-only TrustZone project: the build must be configured "
+            "with MSECURITY_MODE=SECURE. This is set automatically by "
+            "projects/${NO_OS_PROJECT_NAME}/trustzone.cmake; if that marker is missing, "
+            "add -DMSECURITY_MODE=SECURE to the cmake configure line.")
+    endif()
+
+    _no_os_tz_abspaths(_secure_src ${TZ_SECURE_SRC})
+    _no_os_tz_abspaths(_secure_inc ${TZ_SECURE_INC})
+
+    # Gate 1: regenerate partition_<target>.h + expose the Secure includes to no-os.
+    _no_os_tz_prepare_secure_partition(SECURE_INC ${_secure_inc})
+
+    set(_implib ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}_implib.o)
+
+    add_executable(${APP_NAME} ${_secure_src})
+    if(_secure_inc)
+        target_include_directories(${APP_NAME} PRIVATE ${_secure_inc})
+    endif()
+    target_link_libraries(${APP_NAME} no-os)
+    # Emit the CMSE import library as a first-class deliverable so a separately
+    # built Non-Secure image can resolve the __ns_entry gateway veneers.
+    target_link_options(${APP_NAME} PRIVATE
+        -Wl,--cmse-implib -Wl,--out-implib=${_implib})
+
+    config_platform_sdk(${APP_NAME})
+    generate_openocd_config()
+    add_flash_target(${APP_NAME})
+
+    # Deliverables: Secure Intel HEX (no `objcopy -O binary`; the empty
+    # .nonsecure_flash at the Non-Secure alias would balloon a raw binary) and
+    # the implib (a link byproduct, declared so Ninja tracks it).
+    add_custom_command(TARGET ${APP_NAME} POST_BUILD
+        BYPRODUCTS ${_implib}
+        COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${APP_NAME}> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}.hex
+        COMMAND ${CMAKE_COMMAND} -E echo "Binary size:" && (${CMAKE_SIZE} --format=berkeley $<TARGET_FILE:${APP_NAME}> || ${CMAKE_COMMAND} -E true)
+        COMMENT "Generating ${APP_NAME}.hex + ${APP_NAME}_implib.o (Secure-only deliverables)")
+
+    _no_os_tz_write_contract(${APP_NAME})
+endfunction()
+
+# =============================================================================
+# no_os_add_maxim_trustzone_nonsecure_app() - Non-Secure-only CONSUMER.
+#
+# Builds just the Non-Secure world against a Secure image produced elsewhere
+# (by no_os_add_maxim_trustzone_secure_app, or any matching Secure deliverable),
+# then merges the two HEX files into one flashable image. The Secure world is
+# NOT rebuilt; only the memory-map + gateway contract is consumed.
+#
+# The Non-Secure link resolves the __ns_entry gateway veneers against the Secure
+# import library (SECURE_IMPLIB). A Non-Secure app that calls no Secure gateway
+# needs no implib -- omit it. SECURE_HEX is the Secure image to combine with;
+# omit it to produce only the standalone Non-Secure HEX.
+#
+# The outer build runs entirely in the Non-Secure world (MSECURITY_MODE=NONSECURE,
+# set by projects/<name>/trustzone.cmake). The Non-Secure memory map comes from
+# the selected <target>_ns.ld (the default split, or a generated one via
+# NO_OS_TZ_GEN_DIR); it must match the Secure image's map (see its contract).
+#
+# Usage (projects/<name>/CMakeLists.txt):
+#   include(maxim_trustzone)
+#   no_os_add_maxim_trustzone_nonsecure_app(<name>
+#       NONSECURE_SRC  src/nonsecure/main.c
+#       NONSECURE_INC  src/nonsecure
+#       [SECURE_IMPLIB <path/to/secure_implib.o>]
+#       [SECURE_HEX    <path/to/secure.hex>])
+# =============================================================================
+function(no_os_add_maxim_trustzone_nonsecure_app APP_NAME)
+    cmake_parse_arguments(TZ
+        ""
+        "SECURE_IMPLIB;SECURE_HEX"
+        "NONSECURE_SRC;NONSECURE_INC"
+        ${ARGN})
+
+    if(NOT TZ_NONSECURE_SRC)
+        message(FATAL_ERROR
+            "no_os_add_maxim_trustzone_nonsecure_app(${APP_NAME}): NONSECURE_SRC is required.")
+    endif()
+    if(NOT (DEFINED MSECURITY_MODE AND MSECURITY_MODE STREQUAL "NONSECURE"))
+        message(FATAL_ERROR
+            "${APP_NAME} is a Non-Secure-only TrustZone project: the build must be "
+            "configured with MSECURITY_MODE=NONSECURE. This is set automatically by "
+            "projects/${NO_OS_PROJECT_NAME}/trustzone.cmake; if that marker is missing, "
+            "add -DMSECURITY_MODE=NONSECURE to the cmake configure line.")
+    endif()
+
+    _no_os_tz_abspaths(_ns_src ${TZ_NONSECURE_SRC})
+    _no_os_tz_abspaths(_ns_inc ${TZ_NONSECURE_INC})
+
+    add_executable(${APP_NAME} ${_ns_src})
+    if(_ns_inc)
+        target_include_directories(${APP_NAME} PRIVATE ${_ns_inc})
+    endif()
+    target_link_libraries(${APP_NAME} no-os)
+
+    # Link the provided Secure import library so the __ns_entry gateway veneers
+    # resolve. Optional: a pure Non-Secure app that calls no Secure gateway needs
+    # nothing from the Secure side at link time.
+    if(TZ_SECURE_IMPLIB)
+        no_os_require_path("${TZ_SECURE_IMPLIB}"
+            "SECURE_IMPLIB not found: ${TZ_SECURE_IMPLIB}")
+        target_link_libraries(${APP_NAME} ${TZ_SECURE_IMPLIB})
+    endif()
+
+    config_platform_sdk(${APP_NAME})
+    generate_openocd_config()
+
+    # The Non-Secure image on its own (Intel HEX at its Non-Secure alias origin).
+    set(_ns_hex ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}_nonsecure.hex)
+    add_custom_command(TARGET ${APP_NAME} POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${APP_NAME}> ${_ns_hex}
+        COMMAND ${CMAKE_COMMAND} -E echo "Binary size:" && (${CMAKE_SIZE} --format=berkeley $<TARGET_FILE:${APP_NAME}> || ${CMAKE_COMMAND} -E true)
+        COMMENT "Generating ${APP_NAME}_nonsecure.hex")
+
+    if(TZ_SECURE_HEX)
+        # Combine the provided Secure image with this Non-Secure image into a
+        # single flashable HEX. The two occupy disjoint flash regions, so the
+        # merge is a record-stream concatenation (see maxim_tz_merge_hex.py).
+        no_os_require_path("${TZ_SECURE_HEX}"
+            "SECURE_HEX not found: ${TZ_SECURE_HEX}")
+        set(_combined_hex ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}.hex)
+        add_custom_command(TARGET ${APP_NAME} POST_BUILD
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim_tz_merge_hex.py
+                ${_combined_hex} ${TZ_SECURE_HEX} ${_ns_hex}
+            COMMENT "Merging Secure + Non-Secure -> ${APP_NAME}.hex")
+        _no_os_tz_add_hex_flash_target(${APP_NAME} ${_combined_hex})
+    else()
+        # No Secure image supplied: the Non-Secure image is the deployment
+        # artifact. Publish it under the conventional <name>.hex too and flash
+        # that HEX (program writes only the Non-Secure sectors, so a Secure image
+        # already on the part is left untouched -- an NS-only reflash).
+        set(_ns_only_hex ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}.hex)
+        add_custom_command(TARGET ${APP_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy ${_ns_hex} ${_ns_only_hex}
+            COMMENT "Publishing ${APP_NAME}.hex (Non-Secure only)")
+        _no_os_tz_add_hex_flash_target(${APP_NAME} ${_ns_only_hex})
+    endif()
 endfunction()

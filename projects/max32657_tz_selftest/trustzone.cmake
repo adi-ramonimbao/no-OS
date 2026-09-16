@@ -1,4 +1,4 @@
-# Marks max32657_tz_hello as a Secure TrustZone application.
+# Marks max32657_tz_selftest as a Secure TrustZone application.
 #
 # The top-level CMakeLists includes this before the toolchain is processed (see
 # the "TrustZone project" hook), so MSECURITY_MODE is set in the cache and the

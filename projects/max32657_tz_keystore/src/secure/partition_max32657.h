@@ -187,7 +187,7 @@
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
 */
-#define SAU_INIT_END3       0x1107ffff
+#define SAU_INIT_END3       0x11079fff
 
 /*
 //     <o>Region is

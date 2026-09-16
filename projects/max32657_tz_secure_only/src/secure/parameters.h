@@ -6,10 +6,11 @@
 
 /**
  * @file   parameters.h
- * @brief  Secure-world platform parameters for the MAX32657 TZ hello demo.
+ * @brief  Secure-world platform parameters for the MAX32657 TZ producer demo.
  *
  * Only the console UART is configured here: the Secure world prints a banner
- * and then hands the UART to the Non-Secure world.
+ * and then hands the UART (and the other delegated peripherals) to whatever
+ * Non-Secure image is combined with this Secure deliverable.
  */
 
 #ifndef __PARAMETERS_H__
@@ -28,5 +29,12 @@
 #define UART_EXTRA_TYPE		struct max_capi_uart_extra
 #define UART_EXTRA_INIT		{ .use_irq = false }
 #define PLATFORM_NAME		"MAX32657"
+
+/*
+ * Non-Secure flash origin (default TrustZone split). Used to sanity-check that a
+ * Non-Secure image has actually been programmed before branching into it, so a
+ * Secure-only deliverable flashed on its own does not fault on an erased region.
+ */
+#define NS_FLASH_ORIGIN		0x01080000U
 
 #endif /* __PARAMETERS_H__ */

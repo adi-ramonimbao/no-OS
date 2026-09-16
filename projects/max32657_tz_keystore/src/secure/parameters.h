@@ -6,10 +6,10 @@
 
 /**
  * @file   parameters.h
- * @brief  Secure-world platform parameters for the MAX32657 TZ hello demo.
+ * @brief  Secure-world platform parameters for the MAX32657 TZ keystore demo.
  *
  * Only the console UART is configured here: the Secure world prints a banner
- * and then hands the UART to the Non-Secure world.
+ * and then hands the UART to the Non-Secure world, which runs the demo.
  */
 
 #ifndef __PARAMETERS_H__
