@@ -139,9 +139,37 @@ else()
     message(FATAL_ERROR "Unknown or unset STM32 TARGET '${TARGET}'. Set TARGET in the board preset (e.g. stm32f756).")
 endif()
 
+# TrustZone security context for this build tree. MSECURITY_MODE is unset for an
+# ordinary single-image build (today's behaviour, unchanged), SECURE for the
+# secure half of a TrustZone build, and NONSECURE for the non-secure half. Only
+# the secure side compiles with -mcmse (which sets __ARM_FEATURE_CMSE==3 and
+# activates the SAU/veneer code paths); the non-secure side must NOT get it.
+# Unlike Maxim, the linker script itself is NOT selected here: this platform
+# already sets it per-target downstream (config_platform_sdk()/stm32_trustzone.cmake
+# via target_link_options(... -T...)), so only the compile/link flag differs.
+# STM32H5 is the only supported family with an Armv8-M/CMSE core (F4/F7/H7/L4
+# are Cortex-M4/M7, no CMSE extension), so reject MSECURITY_MODE on anything
+# else with a clear message instead of letting -mcmse reach one of those
+# compiles and fail with an opaque GCC error.
+set(TZ_CMSE_FLAGS "")
+if(DEFINED MSECURITY_MODE)
+    if(NOT "${TARGET}" MATCHES "^stm32h5")
+        message(FATAL_ERROR
+            "MSECURITY_MODE is set but TARGET='${TARGET}' is not a TrustZone-capable "
+            "STM32 family (only STM32H5/Cortex-M33 supports it).")
+    endif()
+    if(MSECURITY_MODE STREQUAL "SECURE")
+        set(TZ_CMSE_FLAGS "-mcmse")
+    elseif(NOT MSECURITY_MODE STREQUAL "NONSECURE")
+        message(FATAL_ERROR
+            "MSECURITY_MODE='${MSECURITY_MODE}' is invalid. "
+            "Use SECURE, NONSECURE, or leave it unset for a single-image build.")
+    endif()
+endif()
+
 # Common flags for all build types
-set(CMAKE_C_FLAGS "${STM32_MCU_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C compiler flags" FORCE)
-set(CMAKE_CXX_FLAGS "${STM32_MCU_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C++ compiler flags" FORCE)
+set(CMAKE_C_FLAGS "${STM32_MCU_FLAGS} ${TZ_CMSE_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C compiler flags" FORCE)
+set(CMAKE_CXX_FLAGS "${STM32_MCU_FLAGS} ${TZ_CMSE_FLAGS} -ffunction-sections -fdata-sections -MD" CACHE STRING "C++ compiler flags" FORCE)
 set(CMAKE_ASM_FLAGS "${STM32_MCU_FLAGS} -x assembler-with-cpp" CACHE STRING "ASM compiler flags" FORCE)
 
 # Debug build flags - Full debug info, no optimization
@@ -164,8 +192,9 @@ set(CMAKE_C_FLAGS_MINSIZEREL "-Os -DNDEBUG" CACHE STRING "C compiler flags for M
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG" CACHE STRING "C++ compiler flags for MinSizeRel" FORCE)
 set(CMAKE_ASM_FLAGS_MINSIZEREL "" CACHE STRING "ASM compiler flags for MinSizeRel" FORCE)
 
-# Linker flags (common for all build types)
-set(CMAKE_EXE_LINKER_FLAGS "${STM32_MCU_FLAGS} -specs=nosys.specs -Wl,--gc-sections ${MCU_LINKER_FLAGS} --entry=Reset_Handler" CACHE STRING "Linker flags for MCU" FORCE)
+# Linker flags (common for all build types). -mcmse is carried onto the secure
+# link too (empty otherwise) so gcc selects the CMSE-aware spec.
+set(CMAKE_EXE_LINKER_FLAGS "${STM32_MCU_FLAGS} ${TZ_CMSE_FLAGS} -specs=nosys.specs -Wl,--gc-sections ${MCU_LINKER_FLAGS} --entry=Reset_Handler" CACHE STRING "Linker flags for MCU" FORCE)
 
 if (NOT PROBE)
     set(PROBE "openocd")
