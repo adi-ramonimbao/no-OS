@@ -21,10 +21,21 @@ HEX.
 
 What the Non-Secure world does (``src/nonsecure/main.c``) - an ordinary no-OS
 CAPI application on the handed-over peripherals: routes ``printf`` through the
-CAPI UART, blinks the board LED (P0.13) through CAPI GPIO every 500 ms, reads a
-Secure-owned constant via ``GetSecureMagic_S()``, and on each iteration calls
-``IncrementCount_S()`` to advance a counter in Non-Secure memory. Both gateways
-resolve from the producer's import library at link time.
+CAPI UART, then drives the Secure **keystore** across the boundary and shows the
+boundary holding, before blinking the board LED (P0.13) through CAPI GPIO every
+500 ms as a heartbeat. Four checks run once at startup:
+
+* ``ENCRYPT`` - ``KeystoreTransform_S()`` over the known-answer plaintext yields
+  the expected ciphertext, proving the Secure world holds the right key without
+  ever exposing it.
+* ``ROUNDTRIP`` - transforming twice restores the plaintext (XOR is involutive).
+* ``REJECT_SECURE_DST`` - ``KeystoreTransform_S()`` aimed at Secure SRAM returns
+  ``-EINVAL``: the gateway's CMSE check refuses the pointer.
+* ``REJECT_DIRECT_READ`` - a direct Non-Secure read of Secure memory faults; the
+  Secure world traps and recovers it, and ``KeystoreFaultCount_S()`` confirms
+  the trap fired.
+
+Both gateways resolve from the producer's import library at link time.
 
 Consuming the Secure deliverables
 ---------------------------------
@@ -61,14 +72,14 @@ at all - omit it.
 .. note::
 
 	Without an import library (or with a mismatched one), the Non-Secure link
-	fails with undefined references to ``IncrementCount_S`` /
-	``GetSecureMagic_S``.
+	fails with undefined references to ``KeystoreTransform_S`` /
+	``KeystoreFaultCount_S``.
 
 How CMake produces the combined image
 -------------------------------------
 
 The consumer uses the reusable ``no_os_add_maxim_trustzone_nonsecure_app()``
-framework (``cmake/maxim_trustzone.cmake``); the project's ``CMakeLists.txt``
+framework (``cmake/maxim/maxim_trustzone.cmake``); the project's ``CMakeLists.txt``
 just declares its Non-Secure sources and forwards the Secure deliverables. The
 outer build runs entirely in the Non-Secure world (``MSECURITY_MODE=NONSECURE``,
 set by ``trustzone.cmake``). The Non-Secure memory map comes from the selected
@@ -81,7 +92,7 @@ build hard-fails if they are missing -- so the map always matches the Secure ima
 Steps: link the Non-Secure ELF against ``SECURE_IMPLIB`` -> ``objcopy -O ihex``
 to ``..._nonsecure.hex`` (the Non-Secure image at ``0x01080000``) -> merge with
 ``SECURE_HEX`` into ``..._nonsecure_only.hex`` via
-``cmake/maxim_tz_merge_hex.py`` (an Intel-HEX record-stream concatenation; the
+``cmake/maxim/maxim_tz_merge_hex.py`` (an Intel-HEX record-stream concatenation; the
 two worlds occupy disjoint flash regions, so the merge keeps their absolute
 addresses and checks for overlap).
 
@@ -137,12 +148,16 @@ Expected console output (115200 8N1), once both worlds are on the part::
 
 	**** MAX32657 TrustZone Secure producer (no-OS CAPI) ****
 	Currently in the Secure world.
+	Secret key held Secure; Non-Secure world drives it via gateways.
 	Beginning transition to the Non-Secure world.
 	Hello from the Non-Secure world (no-OS CAPI)!
-	Secure magic = 0x5A5A5A5A
-	count = 1
-	count = 2
-	...
+	Driving the Secure keystore across the boundary.
+	[KEYSTORE] ENCRYPT            PASS
+	[KEYSTORE] ROUNDTRIP          PASS
+	[KEYSTORE] REJECT_SECURE_DST  PASS
+	[KEYSTORE] REJECT_DIRECT_READ PASS
+
+	All keystore checks passed.
 
 with LED0 (P0.13) toggling every 500 ms.
 
@@ -187,7 +202,8 @@ Layout
 	├── README.rst
 	└── src/
 	    └── nonsecure/
-	        ├── main.c              # CAPI UART print + LED blink + gateway calls
+	        ├── main.c              # CAPI UART print + keystore boundary tests +
+	        │                       #   LED heartbeat + gateway calls
 	        └── parameters.h        # UART + LED (P0.13) params
 
 See also

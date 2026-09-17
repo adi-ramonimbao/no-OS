@@ -373,27 +373,35 @@ void _dma_handler(mxc_dma_regs_t *dma, uint32_t channel)
 {
 	IRQn_Type irq;
 
-	switch (channel) {
-	case 0:
-		irq = DMA1_CH0_IRQn;
-		break;
-	case 1:
-		irq = DMA1_CH1_IRQn;
-		break;
-	case 2:
-		irq = DMA1_CH2_IRQn;
-		break;
-	case 3:
-		irq = DMA1_CH3_IRQn;
-		break;
-	default:
+	if (channel > 3)
 		return;
-	}
+
+	irq = MXC_DMA_CH_GET_IRQ(dma, channel);
 
 	if (irq_table[irq].callback)
 		irq_table[irq].callback(irq_table[irq].arg);
 
 	MXC_DMA_Handler(dma);
+}
+
+void DMA0_CH0_IRQHandler()
+{
+	_dma_handler(MXC_DMA0_NS, 0);
+}
+
+void DMA0_CH1_IRQHandler()
+{
+	_dma_handler(MXC_DMA0_NS, 1);
+}
+
+void DMA0_CH2_IRQHandler()
+{
+	_dma_handler(MXC_DMA0_NS, 2);
+}
+
+void DMA0_CH3_IRQHandler()
+{
+	_dma_handler(MXC_DMA0_NS, 3);
 }
 
 void DMA1_CH0_IRQHandler()

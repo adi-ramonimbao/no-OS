@@ -27,6 +27,8 @@ worlds are produced by two separate builds around a shared contract.
 What the Secure world does (``src/secure/main.c``):
 
 * brings up the console UART through CAPI and prints a banner,
+* enables the SecureFault exception so a Non-Secure access to Secure memory is
+  trapped and recovered here instead of escalating,
 * exposes the flash code region as Non-Secure-Callable so the gateway veneers
   are reachable from Non-Secure code,
 * hands GPIO0 / GCR / UART to the Non-Secure world with ``MXC_SPC_SetNonSecure()``,
@@ -34,14 +36,20 @@ What the Secure world does (``src/secure/main.c``):
   Non-Secure image has actually been programmed - so this Secure-only image can
   be flashed standalone without faulting on an erased region.
 
-Two secure gateways (``__ns_entry``) are exported for the Non-Secure world and
-recorded in the emitted import library:
+The Secure world owns a **secret key** and exposes it only as an operation,
+never as data. Two secure gateways (``__ns_entry``) are exported for the
+Non-Secure world and recorded in the emitted import library:
 
-* ``int IncrementCount_S(volatile int *count_ns)`` - increments a
-  caller-supplied Non-Secure counter, after validating the pointer with
-  ``cmse_check_pointed_object()``.
-* ``uint32_t GetSecureMagic_S(void)`` - returns a Secure-owned constant (a
-  Secure -> Non-Secure return path).
+* ``int KeystoreTransform_S(uint8_t *buf_ns, size_t len)`` - XOR a Non-Secure
+  buffer with the Secure-held key, after validating the whole buffer with
+  ``cmse_check_address_range()`` (a pointer into Secure memory is rejected,
+  never dereferenced). The key never leaves the Secure world.
+* ``uint32_t KeystoreFaultCount_S(void)`` - report how many Non-Secure accesses
+  to Secure memory the ``SecureFault_Handler()`` has trapped and recovered.
+
+The cipher is a trivial repeating-key XOR standing in for whatever real
+operation (AES, ECDSA sign, ...) a production Secure world would run behind the
+same boundary; the security feature on show is the boundary, not the cipher.
 
 Standalone run behaviour
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -89,7 +97,7 @@ How CMake produces the Secure-only image
 -----------------------------------------
 
 The producer uses the reusable ``no_os_add_maxim_trustzone_secure_app()``
-framework (``cmake/maxim_trustzone.cmake``); the project's ``CMakeLists.txt``
+framework (``cmake/maxim/maxim_trustzone.cmake``); the project's ``CMakeLists.txt``
 just declares its Secure sources. With no Non-Secure image to embed there is no
 Secure <-> Non-Secure circular dependency, so the two-pass implib dance of the
 combined superbuild collapses to a **single link**: one Secure executable linked
@@ -167,7 +175,7 @@ Inspecting the Secure-only image
 
 Expect ``.text`` at ``0x11000000`` and ``.gnu.sgstubs`` at ``0x11078000``, and
 **no** ``.nonsecure_flash`` (it is empty). The import library exports
-``IncrementCount_S`` and ``GetSecureMagic_S`` at their NSC-region veneer
+``KeystoreTransform_S`` and ``KeystoreFaultCount_S`` at their NSC-region veneer
 addresses.
 
 Wiring - MAX32657 (MAX32657EVKIT)
@@ -190,5 +198,6 @@ Layout
 	└── src/
 	    └── secure/
 	        ├── main.c              # banner, SPC handover, guarded NonSecure_Init,
-	        │                       #   IncrementCount_S + GetSecureMagic_S gateways
+	        │                       #   secret key + KeystoreTransform_S/
+	        │                       #   KeystoreFaultCount_S gateways + SecureFault
 	        └── parameters.h        # console UART params + NS_FLASH_ORIGIN

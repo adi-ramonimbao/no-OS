@@ -9,7 +9,7 @@ Overview
 --------
 
 ``max32657_tz_selftest`` is a second project built on the reusable
-``no_os_add_maxim_trustzone_app()`` framework (``cmake/maxim_trustzone.cmake``),
+``no_os_add_maxim_trustzone_app()`` framework (``cmake/maxim/maxim_trustzone.cmake``),
 alongside ``max32657_tz_hello``. Where the hello demo shows the world-switch,
 this project *tests* it: the Secure world hands the console UART to the
 Non-Secure world and branches into it, and the Non-Secure world runs the shared

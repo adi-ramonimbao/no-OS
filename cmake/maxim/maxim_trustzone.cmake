@@ -46,7 +46,7 @@
 include(project_utils)
 
 # Loader stub template shipped with the framework (not per-project).
-set(_NO_OS_MAXIM_TZ_LOADER_TEMPLATE "${CMAKE_CURRENT_LIST_DIR}/maxim_trustzone_load.S.in"
+set(_NO_OS_MAXIM_TZ_LOADER_TEMPLATE "${CMAKE_CURRENT_LIST_DIR}/templates/maxim_trustzone_load.S.in"
     CACHE INTERNAL "Framework .incbin loader stub for TrustZone superbuilds")
 
 # Resolve a list of (possibly relative) paths to absolute against the caller's
@@ -111,7 +111,7 @@ function(_no_os_tz_prepare_secure_partition)
         "TrustZone secure linker script not found: ${_tz_active_sld}")
     no_os_run_checked(
         WHAT "generating ${TARGET} TrustZone partition (${_tz_secure_dir}/partition_${TARGET}.h)"
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim_tz_gen_partition.py
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim/maxim_tz_gen_partition.py
             --template ${_tz_template}
             --sld ${_tz_active_sld}
             --out ${_tz_secure_dir}/partition_${TARGET}.h)
@@ -318,7 +318,13 @@ function(no_os_add_maxim_trustzone_app APP_NAME)
         COMMAND ${CMAKE_OBJCOPY} -O binary ${_ns_elf} ${_ns_bin}
         DEPENDS ${APP_NAME}_implib ${_secure_implib} ${_nonsecure_src} ${_ns_conf_abs}
         COMMENT "Building nested Non-Secure image -> nonsecure.bin"
+        USES_TERMINAL
         VERBATIM)
+
+    # The nested Non-Secure tree is a separate build dir the outer `clean` does
+    # not know about; register it so `clean` / `--build --clean-first` wipe it
+    # too and force a full Non-Secure rebuild rather than an incremental one.
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES ${_ns_build_dir})
 
     # ---- 4. Assemble nonsecure_load.S -> nonsecure.o -------------------------
     # The linker script's KEEP(*nonsecure.o) pins the embedded NS image, so the
@@ -517,7 +523,7 @@ function(no_os_add_maxim_trustzone_nonsecure_app APP_NAME)
             "SECURE_HEX not found: ${TZ_SECURE_HEX}")
         set(_combined_hex ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${APP_NAME}.hex)
         add_custom_command(TARGET ${APP_NAME} POST_BUILD
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim_tz_merge_hex.py
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/cmake/maxim/maxim_tz_merge_hex.py
                 ${_combined_hex} ${TZ_SECURE_HEX} ${_ns_hex}
             COMMENT "Merging Secure + Non-Secure -> ${APP_NAME}.hex")
         _no_os_tz_add_hex_flash_target(${APP_NAME} ${_combined_hex})

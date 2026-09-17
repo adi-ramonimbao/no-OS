@@ -23,17 +23,22 @@
  *      Non-Secure image has actually been programmed, so this Secure-only image
  *      can be flashed standalone without faulting on an erased region.
  *
- * Two secure gateways (__ns_entry) are exported for the Non-Secure world:
- *   IncrementCount_S() - increments a caller-supplied Non-Secure counter, after
- *                        validating the pointer with the CMSE intrinsic, and
- *   GetSecureMagic_S() - returns a Secure-owned constant (Secure -> Non-Secure
- *                        return path).
- * Both are recorded in the emitted import library (<name>_implib.o).
+ * A Secure-owned secret key backs two __ns_entry gateways exported for the
+ * Non-Secure world, so the Non-Secure app can use the key but never read it:
+ *   KeystoreTransform_S()  - XOR a validated Non-Secure buffer with the Secure
+ *                            key; a pointer into Secure memory is rejected by a
+ *                            CMSE range check, never dereferenced, and
+ *   KeystoreFaultCount_S() - report how many Non-Secure accesses to Secure
+ *                            memory the SecureFault handler has trapped.
+ * Both are recorded in the emitted import library (<name>_implib.o). The cipher
+ * is a trivial repeating-key XOR standing in for a real Secure operation; the
+ * security feature on show is the boundary, not the cipher.
  */
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <errno.h>
 
 #include "mxc.h"
@@ -45,30 +50,73 @@
 
 #include "parameters.h"
 
-/* Secure-owned constant returned across the boundary (contract with the NS app). */
-#define SECURE_MAGIC		0x5A5A5A5AU
+/*
+ * The protected asset. It lives in Secure memory and no gateway ever returns
+ * it: the Non-Secure world can drive the transform but can never read these
+ * bytes. The Non-Secure consumer knows only the known-answer vector derived
+ * from this key; regenerate that vector if you change the key here.
+ */
+static const uint8_t secret_key[] = { 0xA5, 0x5A, 0x3C, 0xC3 };
 
-/* Secure gateway called from the Non-Secure world. __ns_entry expands to
- * __attribute((cmse_nonsecure_entry)); the linker emits an SG veneer for it in
- * the Non-Secure Callable region and records it in the import library. */
-__ns_entry int IncrementCount_S(volatile int *count_ns)
+/* Count of Non-Secure security violations trapped by SecureFault_Handler(). */
+static volatile uint32_t secure_fault_count;
+
+/* Secure gateway: transform a Non-Secure buffer with the Secure-held key.
+ * __ns_entry expands to __attribute((cmse_nonsecure_entry)); the linker emits
+ * an SG veneer for it in the Non-Secure Callable region and records it in the
+ * import library. */
+__ns_entry int KeystoreTransform_S(uint8_t *buf_ns, size_t len)
 {
-	/* Validate the Non-Secure pointer before dereferencing: on a failed
-	 * check cmse_check_pointed_object() returns NULL, so a Non-Secure caller
-	 * cannot trick Secure code into touching Secure memory. */
-	count_ns = cmse_check_pointed_object((int *)count_ns, CMSE_NONSECURE);
-	if (count_ns == NULL)
+	/* Validate the whole Non-Secure buffer before touching it: on a failed
+	 * check cmse_check_address_range() returns NULL, so a Non-Secure caller
+	 * cannot trick the Secure key into reading or writing Secure memory. */
+	buf_ns = cmse_check_address_range(buf_ns, len, CMSE_NONSECURE);
+	if (buf_ns == NULL)
 		return -EINVAL;
 
-	(*count_ns)++;
+	for (size_t i = 0U; i < len; i++)
+		buf_ns[i] ^= secret_key[i % sizeof(secret_key)];
 
 	return 0;
 }
 
-/* Secure gateway returning a Secure-owned constant (no pointer to validate). */
-__ns_entry uint32_t GetSecureMagic_S(void)
+/* Secure gateway: report the running count of trapped security faults. */
+__ns_entry uint32_t KeystoreFaultCount_S(void)
 {
-	return SECURE_MAGIC;
+	return secure_fault_count;
+}
+
+/**
+ * @brief Catch and recover from a Non-Secure access to Secure memory.
+ *
+ * A Non-Secure load/store to a Secure-attributed address raises a SecureFault,
+ * always taken in the Secure world. Rather than hang, this handler records the
+ * violation and rewrites the stacked return PC to the stacked LR, so exception
+ * return resumes as if the faulting Non-Secure function had simply returned to
+ * its caller. The offending access never completes and no Secure data leaks.
+ * A production Secure world would more likely log and reset.
+ */
+void SecureFault_Handler(void)
+{
+	uint32_t *ns_frame;
+
+	/* The faulting Non-Secure context was stacked on the active Non-Secure
+	 * stack (PSP_NS if CONTROL_NS.SPSEL is set, else MSP_NS). */
+	if (__TZ_get_CONTROL_NS() & 0x2U)
+		ns_frame = (uint32_t *)__TZ_get_PSP_NS();
+	else
+		ns_frame = (uint32_t *)__TZ_get_MSP_NS();
+
+	secure_fault_count++;
+
+	/* Clear the sticky Secure Fault Status bits (write-1-to-clear) so we do
+	 * not immediately re-enter on exception return. */
+	SCB->SFSR = SCB->SFSR;
+
+	/* Exception stack frame (Armv8-M, no FP context):
+	 * [0]=R0 [1]=R1 [2]=R2 [3]=R3 [4]=R12 [5]=LR [6]=PC [7]=xPSR.
+	 * PC <- LR: return from the offending Non-Secure function to its caller. */
+	ns_frame[6] = ns_frame[5];
 }
 
 static struct capi_uart_line_config uart_line_config = {
@@ -111,6 +159,12 @@ int main(void)
 
 	printf("\n\r**** MAX32657 TrustZone Secure producer (no-OS CAPI) ****\n\r");
 	printf("Currently in the Secure world.\n\r");
+	printf("Secret key held Secure; Non-Secure world drives it via gateways.\n\r");
+
+	/* Trap Non-Secure accesses to Secure memory here instead of letting them
+	 * escalate to a Secure HardFault. SecureFault_Handler() recovers so the
+	 * Non-Secure app can report the blocked access and carry on. */
+	SCB->SHCSR |= SCB_SHCSR_SECUREFAULTENA_Msk;
 
 	if (!nonsecure_image_present()) {
 		/* Standalone Secure-only image: no Non-Secure world to enter. This

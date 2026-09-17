@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-# =============================================================================
-# maxim_tz_merge_hex.py - merge two or more Intel HEX files into one.
 #
-# Pure Python, no dependencies. Used by no_os_add_maxim_trustzone_nonsecure_app()
-# to combine a separately built Secure image with a freshly built Non-Secure
-# image into a single flashable HEX.
+# Copyright 2026(c) Analog Devices, Inc.
 #
-# It concatenates the record streams of the inputs, dropping every input's
-# End-Of-File record (:00000001FF) and appending a single EOF at the very end.
-# objcopy emits an Extended Linear Address (type 04) record at the start of each
-# file and whenever the upper 16 address bits change, so each region keeps its
-# own absolute addresses after concatenation. Inputs are expected to occupy
-# disjoint address ranges (Secure vs Non-Secure flash); overlap is reported.
+# SPDX-License-Identifier: BSD-3-Clause
 #
-#   usage: maxim_tz_merge_hex.py OUT IN1 IN2 [IN3 ...]
-# =============================================================================
+"""Merge two or more Intel HEX files into one (pure Python, no dependencies).
+
+Used by no_os_add_maxim_trustzone_nonsecure_app() to combine a separately built
+Secure image with a freshly built Non-Secure image into a single flashable HEX.
+
+It concatenates the record streams of the inputs, dropping every input's
+End-Of-File record (:00000001FF) and appending a single EOF at the very end.
+objcopy emits an Extended Linear Address (type 04) record at the start of each
+file and whenever the upper 16 address bits change, so each region keeps its own
+absolute addresses after concatenation. Inputs are expected to occupy disjoint
+address ranges (Secure vs Non-Secure flash); overlap is reported.
+
+    usage: maxim_tz_merge_hex.py OUT IN1 IN2 [IN3 ...]
+"""
 import sys
 
 

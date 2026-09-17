@@ -85,7 +85,7 @@ behaviour), selects the memory layout, the linker script and ``-mcmse`` per
 tree.
 
 The superbuild is provided by the reusable ``no_os_add_maxim_trustzone_app()``
-framework (``cmake/maxim_trustzone.cmake``); the project's ``CMakeLists.txt`` just
+framework (``cmake/maxim/maxim_trustzone.cmake``); the project's ``CMakeLists.txt`` just
 declares its sources. Its dependency chain mirrors the MSDK ``max32657.mk``:
 
 #. **Compile** the Secure objects with ``-mcmse`` and ``max32657_s.ld``

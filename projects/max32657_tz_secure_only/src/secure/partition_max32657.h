@@ -104,7 +104,7 @@
 /*
 //     <o>Start Address <0-0xFFFFFFE0>
 */
-#define SAU_INIT_START0     0x01060000      /* start address of SAU region 0 (ROM) */
+#define SAU_INIT_START0     0x01080000      /* start address of SAU region 0 (ROM) */
 
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
@@ -182,12 +182,12 @@
 /*
 //     <o>Start Address <0-0xFFFFFFE0>
 */
-#define SAU_INIT_START3     0x11058000
+#define SAU_INIT_START3     0x11078000
 
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
 */
-#define SAU_INIT_END3       0x1105ffff
+#define SAU_INIT_END3       0x1107ffff
 
 /*
 //     <o>Region is
