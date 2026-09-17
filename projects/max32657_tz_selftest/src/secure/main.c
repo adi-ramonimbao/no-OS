@@ -123,7 +123,15 @@ int main(void)
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_SPI);
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_I3C);
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_TMR0);
-	MXC_SPC_GPIO_SetNonSecure(MXC_GPIO0, 0xFFFFFFFFU);
+	/* Despite the name, SPC_GPIO0 is NOT a per-pin ownership register - GPIO0
+	 * ownership is the PERIPH_GPIO0 call above. SPC_GPIO0 is a per-pin
+	 * GPIO0_IN "Read Disable" mask (set = IN always reads 0, to Secure and
+	 * Non-Secure alike; INEN/INTEN/interrupts are unaffected). So this must
+	 * be CLEARED (SetSecure) for the delegated pins, not set, or Non-Secure
+	 * gets a live GPIO0 but can never read GPIO0_IN. Only bits [13:0]
+	 * (MXC_F_SPC_GPIO0_PINS) are defined; a blanket 0xFFFFFFFF also touches
+	 * undocumented upper bits in this register. */
+	MXC_SPC_GPIO_SetSecure(MXC_GPIO0, MXC_F_SPC_GPIO0_PINS);
 
 	/* Target the peripheral interrupt lines the Non-Secure world uses at the
 	 * Non-Secure state; they default to Secure, so an un-targeted line would
