@@ -23,19 +23,22 @@ What the Non-Secure world does (``src/nonsecure/main.c``) - an ordinary no-OS
 CAPI application on the handed-over peripherals: routes ``printf`` through the
 CAPI UART, then drives the Secure **keystore** across the boundary and shows the
 boundary holding, before blinking the board LED (P0.13) through CAPI GPIO every
-500 ms as a heartbeat. Four checks run once at startup:
+500 ms as a heartbeat. Five checks run once at startup:
 
-* ``ENCRYPT`` - ``KeystoreTransform_S()`` over the known-answer plaintext yields
-  the expected ciphertext, proving the Secure world holds the right key without
-  ever exposing it.
-* ``ROUNDTRIP`` - transforming twice restores the plaintext (XOR is involutive).
+* ``SELFTEST`` - ``KeystoreSelfTest_S()`` has the Secure world verify its key
+  against a **Secure-held** known-answer and return only pass/fail, so the
+  Non-Secure side proves key correctness without holding any reference answer.
+* ``ROUNDTRIP`` - transforming twice restores the input (XOR is involutive): the
+  key worked but never crossed the boundary.
+* ``NON_IDENTITY`` - one transform changes the data, proving a non-trivial key
+  is applied, without the Non-Secure side needing to know the output.
 * ``REJECT_SECURE_DST`` - ``KeystoreTransform_S()`` aimed at Secure SRAM returns
   ``-EINVAL``: the gateway's CMSE check refuses the pointer.
 * ``REJECT_DIRECT_READ`` - a direct Non-Secure read of Secure memory faults; the
   Secure world traps and recovers it, and ``KeystoreFaultCount_S()`` confirms
   the trap fired.
 
-Both gateways resolve from the producer's import library at link time.
+All three gateways resolve from the producer's import library at link time.
 
 Consuming the Secure deliverables
 ---------------------------------
@@ -152,8 +155,9 @@ Expected console output (115200 8N1), once both worlds are on the part::
 	Beginning transition to the Non-Secure world.
 	Hello from the Non-Secure world (no-OS CAPI)!
 	Driving the Secure keystore across the boundary.
-	[KEYSTORE] ENCRYPT            PASS
+	[KEYSTORE] SELFTEST          PASS
 	[KEYSTORE] ROUNDTRIP          PASS
+	[KEYSTORE] NON_IDENTITY       PASS
 	[KEYSTORE] REJECT_SECURE_DST  PASS
 	[KEYSTORE] REJECT_DIRECT_READ PASS
 

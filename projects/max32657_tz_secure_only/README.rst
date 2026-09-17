@@ -37,13 +37,17 @@ What the Secure world does (``src/secure/main.c``):
   be flashed standalone without faulting on an erased region.
 
 The Secure world owns a **secret key** and exposes it only as an operation,
-never as data. Two secure gateways (``__ns_entry``) are exported for the
+never as data. Three secure gateways (``__ns_entry``) are exported for the
 Non-Secure world and recorded in the emitted import library:
 
 * ``int KeystoreTransform_S(uint8_t *buf_ns, size_t len)`` - XOR a Non-Secure
   buffer with the Secure-held key, after validating the whole buffer with
   ``cmse_check_address_range()`` (a pointer into Secure memory is rejected,
   never dereferenced). The key never leaves the Secure world.
+* ``int KeystoreSelfTest_S(void)`` - verify the key against a **Secure-held**
+  known-answer entirely inside the Secure world and return only pass/fail, so
+  the Non-Secure world can confirm key correctness without holding any
+  reference answer of its own.
 * ``uint32_t KeystoreFaultCount_S(void)`` - report how many Non-Secure accesses
   to Secure memory the ``SecureFault_Handler()`` has trapped and recovered.
 
@@ -175,8 +179,8 @@ Inspecting the Secure-only image
 
 Expect ``.text`` at ``0x11000000`` and ``.gnu.sgstubs`` at ``0x11078000``, and
 **no** ``.nonsecure_flash`` (it is empty). The import library exports
-``KeystoreTransform_S`` and ``KeystoreFaultCount_S`` at their NSC-region veneer
-addresses.
+``KeystoreTransform_S``, ``KeystoreSelfTest_S`` and ``KeystoreFaultCount_S`` at
+their NSC-region veneer addresses.
 
 Wiring - MAX32657 (MAX32657EVKIT)
 ---------------------------------
@@ -199,5 +203,6 @@ Layout
 	    └── secure/
 	        ├── main.c              # banner, SPC handover, guarded NonSecure_Init,
 	        │                       #   secret key + KeystoreTransform_S/
-	        │                       #   KeystoreFaultCount_S gateways + SecureFault
+	        │                       #   KeystoreSelfTest_S/KeystoreFaultCount_S
+	        │                       #   gateways + SecureFault
 	        └── parameters.h        # console UART params + NS_FLASH_ORIGIN

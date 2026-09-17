@@ -14,11 +14,13 @@
  * peripherals: prints over the CAPI UART, then drives the Secure keystore
  * across the boundary and shows the boundary holding:
  *
- *   ENCRYPT            - KeystoreTransform_S() over the known-answer plaintext
- *                        yields the expected ciphertext, proving the Secure
- *                        world holds the right key without ever exposing it.
- *   ROUNDTRIP          - transforming twice restores the plaintext (XOR is
+ *   SELFTEST           - KeystoreSelfTest_S() has the Secure world check its key
+ *                        against a Secure-held known-answer and return only
+ *                        pass/fail, so the Non-Secure side holds no answer.
+ *   ROUNDTRIP          - transforming twice restores the input (XOR is
  *                        involutive): the key worked but never crossed over.
+ *   NON_IDENTITY       - one transform changes the data, proving a key is
+ *                        applied, without the Non-Secure side knowing the output.
  *   REJECT_SECURE_DST  - KeystoreTransform_S() aimed at Secure SRAM returns
  *                        -EINVAL: the gateway's CMSE check refuses the pointer.
  *   REJECT_DIRECT_READ - a direct Non-Secure read of Secure memory faults; the
@@ -46,18 +48,18 @@
 #include "parameters.h"
 
 /* Secure gateways, resolved at link time from the Secure import library. The
- * key they use lives only in the Secure world; the Non-Secure side knows only
- * the known-answer vector below. */
+ * key they use lives only in the Secure world, and so does the known-answer:
+ * KeystoreSelfTest_S() verifies the key inside Secure and returns only pass/fail,
+ * so the Non-Secure side holds no reference answer. */
 extern int KeystoreTransform_S(uint8_t *buf_ns, size_t len);
+extern int KeystoreSelfTest_S(void);
 extern uint32_t KeystoreFaultCount_S(void);
 
-/* Known-answer test vector: plaintext and the ciphertext the Secure key is
- * expected to produce. Matching it proves the Secure world holds the right key
- * without the key ever crossing the boundary. Regenerate if the Secure key in
- * max32657_tz_secure_only changes. */
+/* Test input - just some bytes to transform. There is deliberately NO expected
+ * ciphertext here; key correctness is proven by KeystoreSelfTest_S() and by
+ * transform properties (round-trip, non-identity). */
 #define TZ_KS_LEN		9U
-#define TZ_KS_PLAINTEXT		{ 0x54, 0x72, 0x75, 0x73, 0x74, 0x5A, 0x6F, 0x6E, 0x65 }
-#define TZ_KS_CIPHERTEXT	{ 0xF1, 0x28, 0x49, 0xB0, 0xD1, 0x00, 0x53, 0xAD, 0xC0 }
+#define TZ_KS_INPUT		{ 0x54, 0x72, 0x75, 0x73, 0x74, 0x5A, 0x6F, 0x6E, 0x65 }
 
 /* Base of the Secure SRAM alias; a Non-Secure caller cannot access it. */
 #define TZ_SECURE_SRAM_BASE	0x30000000U
@@ -113,29 +115,37 @@ static void report(const char *name, bool pass)
 		failures++;
 }
 
-/* KeystoreTransform_S() over the KAT plaintext yields the KAT ciphertext: the
- * Secure world holds the right key, proven without the key crossing over. */
-static void test_encrypt(void)
+/* Ask the Secure world to verify its own key against a Secure-held known-answer.
+ * Only the pass/fail result crosses the boundary; no answer lives here. */
+static void test_selftest(void)
 {
-	uint8_t buf[TZ_KS_LEN] = TZ_KS_PLAINTEXT;
-	const uint8_t expected_ct[TZ_KS_LEN] = TZ_KS_CIPHERTEXT;
-	int ret;
-
-	ret = KeystoreTransform_S(buf, TZ_KS_LEN);
-	report("ENCRYPT", ret == 0 && memcmp(buf, expected_ct, TZ_KS_LEN) == 0);
+	report("SELFTEST", KeystoreSelfTest_S() == 0);
 }
 
-/* Transforming twice restores the plaintext (XOR is involutive). */
+/* Transforming twice restores the input (XOR is involutive) - a property check
+ * that needs no expected ciphertext. */
 static void test_roundtrip(void)
 {
-	uint8_t buf[TZ_KS_LEN] = TZ_KS_PLAINTEXT;
-	const uint8_t plaintext[TZ_KS_LEN] = TZ_KS_PLAINTEXT;
+	uint8_t buf[TZ_KS_LEN] = TZ_KS_INPUT;
+	const uint8_t input[TZ_KS_LEN] = TZ_KS_INPUT;
 	int r1, r2;
 
 	r1 = KeystoreTransform_S(buf, TZ_KS_LEN);
 	r2 = KeystoreTransform_S(buf, TZ_KS_LEN);
 	report("ROUNDTRIP", r1 == 0 && r2 == 0 &&
-	       memcmp(buf, plaintext, TZ_KS_LEN) == 0);
+	       memcmp(buf, input, TZ_KS_LEN) == 0);
+}
+
+/* One transform changes the data, proving a non-trivial key is applied, without
+ * the Non-Secure side needing to know the output. */
+static void test_non_identity(void)
+{
+	uint8_t buf[TZ_KS_LEN] = TZ_KS_INPUT;
+	const uint8_t input[TZ_KS_LEN] = TZ_KS_INPUT;
+	int ret;
+
+	ret = KeystoreTransform_S(buf, TZ_KS_LEN);
+	report("NON_IDENTITY", ret == 0 && memcmp(buf, input, TZ_KS_LEN) != 0);
 }
 
 /* A Secure-memory destination is rejected by the gateway's CMSE guard; only the
@@ -189,8 +199,9 @@ int main(void)
 	printf("Hello from the Non-Secure world (no-OS CAPI)!\n\r");
 	printf("Driving the Secure keystore across the boundary.\n\r");
 
-	test_encrypt();
+	test_selftest();
 	test_roundtrip();
+	test_non_identity();
 	test_reject_secure_dst();
 	test_reject_direct_read();
 
