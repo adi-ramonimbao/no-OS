@@ -12,7 +12,8 @@
  *   1. brings up the console UART through CAPI and prints a banner,
  *   2. exposes the flash code region as Non-Secure Callable so the secure
  *      gateway veneers are reachable from the Non-Secure world,
- *   3. hands GPIO0 / GCR / UART to the Non-Secure world via the SPC,
+ *   3. hands the console UART, GPIO0 (all pins), SPI, I3C ("I2C") and TMR0 - and
+ *      their interrupt lines - to the Non-Secure world via the SPC and NVIC,
  *   4. branches into the Non-Secure image with NonSecure_Init().
  *
  * Two secure gateways (__ns_entry) back the Non-Secure TRUSTZONE test group:
@@ -111,13 +112,27 @@ int main(void)
 	 * veneers can be called from Non-Secure code. */
 	MXC_SPC_SetCode_NSC(true);
 
-	/* Hand the peripherals the Non-Secure app needs over to it. These are no
-	 * longer accessible from the Secure world afterwards. DMA0 is hardwired
-	 * Non-Secure and needs no SPC handover; it only needs its clock, which is
-	 * reachable once the GCR is Non-Secure. */
-	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GPIO0);
+	/* Hand the peripherals the Non-Secure self-test drives over to it, plus
+	 * every GPIO0 pin (the loopback / alternate-function pins live on P0).
+	 * DMA0 is hardwired Non-Secure and needs no handover; it only needs its
+	 * clock, reachable once GCR is Non-Secure. The MAX32657 "I2C" CAPI backend
+	 * drives the I3C block. */
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GCR);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GPIO0);
 	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_UART);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_SPI);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_I3C);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_TMR0);
+	MXC_SPC_GPIO_SetNonSecure(MXC_GPIO0, 0xFFFFFFFFU);
+
+	/* Target the peripheral interrupt lines the Non-Secure world uses at the
+	 * Non-Secure state; they default to Secure, so an un-targeted line would
+	 * be taken by the (absent) Secure handler instead of the Non-Secure one. */
+	NVIC_SetTargetState(UART_IRQn);
+	NVIC_SetTargetState(SPI_IRQn);
+	NVIC_SetTargetState(TMR0_IRQn);
+	NVIC_SetTargetState(I3C_IRQn);
+	NVIC_SetTargetState(GPIO0_IRQn);
 
 	/* Branch into the Non-Secure image (weak impl in system_max32657.c). */
 	ret = NonSecure_Init();

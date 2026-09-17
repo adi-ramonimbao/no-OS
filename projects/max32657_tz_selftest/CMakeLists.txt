@@ -3,21 +3,25 @@
 #
 # A second project on the reusable no_os_add_maxim_trustzone_app() framework
 # (proving it is not coupled to max32657_tz_hello). It produces a single
-# combined ELF whose Non-Secure world runs the shared capi_selftest framework
-# with two groups:
+# combined ELF whose Non-Secure world is a SUPERSET of the maxim capi_selftest:
+# it runs the full capi_loopback group set (GPIO, IRQ, SPI, TIMER, I2C, UART,
+# DMA) reused verbatim from projects/capi_selftest with the same maxim
+# parameters.h, plus two TrustZone-specific groups:
 #
-#   TRUSTZONE - security-gateway tests. Exercise the __ns_entry veneers from the
-#               Non-Secure world: a valid pointer increments; a NULL pointer and
-#               a Secure-memory pointer are both rejected with -EINVAL by the
+#   TRUSTZONE    - security-gateway tests. Exercise the __ns_entry veneers from
+#               the Non-Secure world: a valid pointer increments; a NULL pointer
+#               and a Secure-memory pointer are both rejected with -EINVAL by the
 #               veneer's cmse_check_pointed_object() guard; a value-returning
 #               gateway proves the Secure -> Non-Secure return path.
-#   DMA       - memory-to-memory transfers. From the Non-Secure world these run
-#               on DMA0 (hardwired Non-Secure), so the run also proves the
-#               world-correct DMA instance is selected automatically.
+#   DMA_INSTANCE - reports which DMA controller this world drives (DMA0 in the
+#               Non-Secure world), run just before the DMA transfers.
 #
-# The framework and the DMA test are reused verbatim from projects/capi_selftest
-# (no duplication); only the Non-Secure runner and the TrustZone test group are
-# new here. All transfers stay inside SRAM, so no external wiring is required.
+# The loopback groups, framework, common_data and the maxim parameters.h are
+# compiled from projects/capi_selftest (no duplication); only the Non-Secure
+# runner (with the GPIO-IRQ platform hooks) and the two TrustZone groups are new
+# here. The Secure world hands over the console UART, GPIO0, SPI, I3C ("I2C") and
+# TMR0 - and targets their NVIC lines to Non-Secure - before the tests run.
+# Loopback wiring is identical to the maxim capi_selftest.
 #
 # Build (SDK location comes from the environment, not a -D cache var):
 #   export MAXIM_LIBRARIES=/path/to/msdk/Libraries
@@ -30,6 +34,7 @@ include(maxim_trustzone)
 
 set(_selftest_common  ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/common)
 set(_selftest_loopback ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/examples/capi_loopback)
+set(_selftest_maxim ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/platform/maxim)
 
 no_os_add_maxim_trustzone_app(max32657_tz_selftest
     SECURE_SRC     src/secure/main.c
@@ -37,10 +42,18 @@ no_os_add_maxim_trustzone_app(max32657_tz_selftest
                    src                   # holds tz_gateways.h (shared contract)
     NONSECURE_SRC  src/nonsecure/main.c
                    src/nonsecure/tests/test_trustzone.c
+                   src/nonsecure/tests/test_dma_instance.c
                    ${_selftest_common}/common_data.c
                    ${_selftest_common}/test_framework.c
+                   ${_selftest_loopback}/tests/test_gpio.c
+                   ${_selftest_loopback}/tests/test_irq.c
+                   ${_selftest_loopback}/tests/test_spi.c
+                   ${_selftest_loopback}/tests/test_timer.c
+                   ${_selftest_loopback}/tests/test_i2c.c
+                   ${_selftest_loopback}/tests/test_uart.c
                    ${_selftest_loopback}/tests/test_dma.c
     NONSECURE_INC  src/nonsecure
                    src                   # holds tz_gateways.h (shared contract)
                    ${_selftest_common}
-                   ${_selftest_loopback})
+                   ${_selftest_loopback}
+                   ${_selftest_maxim})     # full maxim capi_selftest parameters.h

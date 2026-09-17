@@ -49,9 +49,14 @@
  */
 static int tz_secure_return(void)
 {
+	uint32_t magic;
+
 	TEST_SECTION("SECURE_RETURN");
 
-	TEST_ASSERT_EQ(GetSecureMagic_S(), TZ_SECURE_MAGIC, "MAGIC");
+	magic = GetSecureMagic_S();
+	TEST_VALUE("GOT", magic);
+	TEST_VALUE("EXPECTED", TZ_SECURE_MAGIC);
+	TEST_ASSERT_EQ(magic, TZ_SECURE_MAGIC, "MAGIC");
 
 	return 0;
 }
@@ -66,8 +71,10 @@ static int tz_increment(void)
 	TEST_SECTION("INCREMENT");
 
 	TEST_ASSERT_EQ(IncrementCount_S(&count), 0, "CALL_1");
+	TEST_VALUE("COUNT", count);
 	TEST_ASSERT_EQ(count, 1, "COUNT_1");
 	TEST_ASSERT_EQ(IncrementCount_S(&count), 0, "CALL_2");
+	TEST_VALUE("COUNT", count);
 	TEST_ASSERT_EQ(count, 2, "COUNT_2");
 
 	return 0;

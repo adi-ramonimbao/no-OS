@@ -11,12 +11,17 @@ Overview
 ``max32657_tz_selftest`` is a second project built on the reusable
 ``no_os_add_maxim_trustzone_app()`` framework (``cmake/maxim/maxim_trustzone.cmake``),
 alongside ``max32657_tz_hello``. Where the hello demo shows the world-switch,
-this project *tests* it: the Secure world hands the console UART to the
-Non-Secure world and branches into it, and the Non-Secure world runs the shared
-``capi_selftest`` framework over two groups.
+this project *tests* it: the Secure world hands its peripherals (and their
+interrupt lines) to the Non-Secure world and branches into it, and the
+Non-Secure world runs the shared ``capi_selftest`` framework.
 
-Because it exists and builds with only its own sources, it also demonstrates
-that the TrustZone framework is not coupled to the hello demo.
+It is a **superset of the maxim** ``capi_selftest``: the Non-Secure world runs
+the full ``capi_loopback`` group set (GPIO, IRQ, SPI, TIMER, I2C, UART, DMA),
+reused verbatim from ``projects/capi_selftest`` with the same maxim
+``parameters.h``, **plus** two TrustZone-specific groups (TRUSTZONE and
+DMA_INSTANCE). Because it exists and builds with only its own runner + gateway
+sources, it also demonstrates that the TrustZone framework is not coupled to the
+hello demo.
 
 What it tests
 -------------
@@ -36,17 +41,26 @@ gateway, exercised across the boundary from the Non-Secure world:
   Non-Secure pointer cannot make Secure code touch Secure memory. The address
   is only passed, never dereferenced by the Non-Secure world.
 
-**DMA** (reused verbatim from ``projects/capi_selftest``) - memory-to-memory
-transfers. From the Non-Secure world the Maxim CAPI DMA backend selects the
-hardwired-Non-Secure ``DMA0`` instance automatically
-(``CONFIG_TRUSTED_EXECUTION_SECURE == 0``), so the run also confirms the
-world-correct DMA engine is picked. All transfers stay inside SRAM.
+**DMA_INSTANCE** (``src/nonsecure/tests/test_dma_instance.c``) - a display group
+run just before DMA that prints both controller bases and the one this world
+selected, confirming the Non-Secure world drives ``DMA0_NS`` (not the Secure
+``DMA1_S``).
 
-No external wiring is required. The remaining ``capi_selftest`` groups (GPIO,
-SPI, I2C, UART async) need board loopback straps and are intentionally left out;
-adding a group is a matter of handing over its peripheral in the Secure world
-(and, for an IRQ-driven group, routing its NVIC line with
-``NVIC_SetTargetState()``) and adding it to the runner table.
+**GPIO / IRQ / SPI / TIMER / I2C / UART / DMA** (reused verbatim from
+``projects/capi_selftest`` with the maxim ``parameters.h``) - the full
+``capi_loopback`` suite, run in the Non-Secure world exactly as the standalone
+maxim ``capi_selftest`` runs it. From the Non-Secure world the CAPI DMA backend
+selects the hardwired-Non-Secure ``DMA0`` instance automatically
+(``CONFIG_TRUSTED_EXECUTION_SECURE == 0``); the MAX32657 "I2C" group drives the
+I3C block.
+
+Wiring is identical to the maxim ``capi_selftest`` loopback: the GPIO, SPI and
+I2C groups need the board loopback straps documented in
+``projects/capi_selftest`` (e.g. GPIO ``P0.7``↔``P0.8`` with JP15 removed, SPI
+``P0.4``↔``P0.2``). The Secure world hands over the console UART, GPIO0 (all
+pins), SPI, I3C and TMR0 - and targets their NVIC lines to Non-Secure with
+``NVIC_SetTargetState()`` - before the tests run; a group whose peripheral or
+interrupt is not delegated would SecureFault at runtime.
 
 Expected console output (115200 8N1)::
 
@@ -54,7 +68,8 @@ Expected console output (115200 8N1)::
 	Handing peripherals to the Non-Secure world; tests run there.
 	... framework run header ...
 	[TRUSTZONE] ... PASS ...
-	[DMA] ... PASS ...
+	[DMA_INSTANCE] ... DMA0_NS (Non-Secure) ...
+	[GPIO] ... [IRQ] ... [SPI] ... [TIMER] ... [I2C] ... [UART] ... [DMA] ...
 	... framework summary (passed/failed/skipped) ...
 
 Structure
@@ -72,20 +87,24 @@ the reused ``capi_selftest`` files are compiled directly from their source trees
 	├── trustzone.cmake         # marker: build Secure world (MSECURITY_MODE=SECURE)
 	├── Kconfig
 	├── secure.conf             # Secure-world defconfig (console UART)
-	├── nonsecure.conf          # Non-Secure-world defconfig (UART/TIME/ALLOC/DMA)
+	├── nonsecure.conf          # Non-Secure-world defconfig (full CAPI class set)
 	├── README.rst
 	└── src/
 	    ├── tz_gateways.h           # shared gateway contract (both worlds)
 	    ├── secure/
-	    │   ├── main.c              # banner, SPC handover, gateway definitions
+	    │   ├── main.c              # banner, SPC + NVIC handover, gateway defs
 	    │   ├── parameters.h        # console UART params
 	    │   └── partition_max32657.h# SAU config (from the MSDK example)
 	    └── nonsecure/
-	        ├── main.c              # framework runner (TRUSTZONE + DMA groups)
-	        ├── parameters.h        # console UART + DMA params
+	        ├── main.c              # runner (full loopback set + TZ groups) + GPIO-IRQ hooks
 	        └── tests/
-	            ├── test_trustzone.c# secure-gateway tests
-	            └── test_trustzone.h
+	            ├── test_trustzone.c    # secure-gateway tests
+	            ├── test_trustzone.h
+	            ├── test_dma_instance.c # DMA controller report
+	            └── test_dma_instance.h
+
+	The GPIO/IRQ/SPI/TIMER/I2C/UART/DMA groups, the framework, common_data and
+	the maxim parameters.h are compiled from projects/capi_selftest (no copies).
 
 Build
 -----
