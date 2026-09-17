@@ -526,7 +526,7 @@ static int stm32_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle
 	priv = handle->priv;
 
 	/* Read input data register */
-	*value_bitmask = priv->port->IDR & GPIO_PIN_All;
+	*value_bitmask = priv->port->IDR & GPIO_PIN_ALL;
 
 	return 0;
 }
