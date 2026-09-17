@@ -5,14 +5,15 @@
  */
 
 /**
- * @file   main.c
- * @brief  Non-Secure-world application for the MAX32657 TrustZone hello demo.
+ * @file   hello_nonsecure.c
+ * @brief  Portable Non-Secure application for the TrustZone hello demo.
  *
- * Reached from the Secure world via NonSecure_Init(). Runs an ordinary no-OS
- * CAPI application on the peripherals the Secure world handed over: it prints
- * over the CAPI UART, blinks the board LED through CAPI GPIO, and on every
- * iteration calls back into the Secure world through the IncrementCount_S()
- * gateway to advance a counter that lives in Non-Secure memory.
+ * An ordinary no-OS CAPI application on the peripherals the Secure world
+ * handed over: prints over the CAPI UART, blinks the board LED through CAPI
+ * GPIO, and on every iteration calls back into the Secure world through the
+ * IncrementCount_S() gateway to advance a counter that lives in Non-Secure
+ * memory. Uses only CAPI plus parameters.h, so it is reused unchanged by any
+ * platform's Non-Secure world (called from platform/<platform>/nonsecure/main.c).
  *
  * IncrementCount_S() is resolved at link time from the Secure import library
  * (secure_implib.o); the call lands on the SG veneer in the Non-Secure
@@ -62,7 +63,7 @@ static const struct capi_gpio_port_config led_port_config = {
 	.extra = &led_extra,
 };
 
-int main(void)
+int example_main(void)
 {
 	struct capi_uart_handle *uart = NULL;
 	struct capi_gpio_port_handle *led_port = NULL;
@@ -74,7 +75,8 @@ int main(void)
 	if (ret)
 		return ret;
 
-	/* Route printf/stdio through the (now Non-Secure) CAPI UART. */
+	/* Route printf/stdio through the (now Non-Secure) CAPI UART. Maxim-only
+	 * extension call; the one line here tied to a specific platform. */
 	max_capi_uart_stdio_enable(uart);
 
 	ret = capi_gpio_port_init(&led_port, &led_port_config);

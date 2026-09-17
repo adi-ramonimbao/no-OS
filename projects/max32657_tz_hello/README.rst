@@ -22,7 +22,8 @@ combined ``.elf``.
 
 What it does at run time:
 
-* **Secure world** (``src/secure/main.c``) - brings up the console UART through
+* **Secure world** (``src/platform/maxim/secure/main.c`` for bring-up,
+  ``src/examples/hello/hello_secure.c`` for the gateway) - brings up the console UART through
   CAPI, prints a banner, then sets the Non-Secure-Callable code region and hands
   GPIO0, the GCR and the UART to the Non-Secure world with
   ``MXC_SPC_SetNonSecure()``. It exposes one gateway,
@@ -31,7 +32,7 @@ What it does at run time:
   counter that lives in Non-Secure memory. It finally calls ``NonSecure_Init()``
   to jump to the Non-Secure world.
 
-* **Non-Secure world** (``src/nonsecure/main.c``) - an ordinary no-OS CAPI
+* **Non-Secure world** (``src/examples/hello/hello_nonsecure.c``) - an ordinary no-OS CAPI
   application on the handed-over peripherals: it routes ``printf`` through the
   CAPI UART, blinks the board LED (P0.13) through CAPI GPIO every 500 ms, and on
   each iteration calls ``IncrementCount_S()`` to advance the counter in the
@@ -112,7 +113,7 @@ Reused MSDK artifacts (from ``${MAXIM_LIBRARIES}/CMSIS/Device/Maxim/MAX32657``):
 ``GCC/max32657_s.ld`` / ``GCC/max32657_ns.ld`` (linker scripts),
 ``Source/system_max32657.c`` (``NonSecure_Init()`` / SAU setup) and the SPC/MPC
 drivers under ``PeriphDrivers/Source/TZ``. ``partition_max32657.h`` (the SAU
-config) is copied into ``src/secure/`` because the Secure build must find it on
+config) is copied into ``src/platform/maxim/secure/`` because the Secure build must find it on
 its include path, matching the MSDK example.
 
 Build

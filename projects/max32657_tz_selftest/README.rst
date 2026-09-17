@@ -26,7 +26,7 @@ hello demo.
 What it tests
 -------------
 
-**TRUSTZONE** (``src/nonsecure/tests/test_trustzone.c``) - the security
+**TRUSTZONE** (``src/examples/selftest/tests/test_trustzone.c``) - the security
 gateway, exercised across the boundary from the Non-Secure world:
 
 * ``SECURE_RETURN`` - ``GetSecureMagic_S()`` returns a Secure-owned constant,
@@ -41,7 +41,7 @@ gateway, exercised across the boundary from the Non-Secure world:
   Non-Secure pointer cannot make Secure code touch Secure memory. The address
   is only passed, never dereferenced by the Non-Secure world.
 
-**DMA_INSTANCE** (``src/nonsecure/tests/test_dma_instance.c``) - a display group
+**DMA_INSTANCE** (``src/platform/maxim/nonsecure/tests/test_dma_instance.c``) - a display group
 run just before DMA that prints both controller bases and the one this world
 selected, confirming the Non-Secure world drives ``DMA0_NS`` (not the Secure
 ``DMA1_S``).

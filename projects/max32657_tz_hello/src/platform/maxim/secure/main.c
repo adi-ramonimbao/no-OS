@@ -17,15 +17,14 @@
  *   4. branches into the Non-Secure image with NonSecure_Init().
  *
  * IncrementCount_S() is the secure gateway (__ns_entry) the Non-Secure app
- * calls back into; it validates the caller-supplied pointer with the CMSE
- * intrinsic before dereferencing it, so a malicious Non-Secure pointer cannot
- * be used to reach Secure memory.
+ * calls back into; it is defined in src/examples/hello/hello_secure.c, which
+ * uses no platform header and is reused unchanged by any platform's Secure
+ * world.
  */
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <errno.h>
 
 #include "mxc.h"
 #include "spc.h"
@@ -35,23 +34,6 @@
 #include "maxim_capi_uart.h"
 
 #include "parameters.h"
-
-/* Secure gateway called from the Non-Secure world. __ns_entry expands to
- * __attribute((cmse_nonsecure_entry)); the linker emits an SG veneer for it in
- * the Non-Secure Callable region and records it in secure_implib.o. */
-__ns_entry int IncrementCount_S(volatile int *count_ns)
-{
-	/* Validate the Non-Secure pointer before dereferencing: on a failed
-	 * check cmse_check_pointed_object() returns NULL, so a Non-Secure caller
-	 * cannot trick Secure code into touching Secure memory. */
-	count_ns = cmse_check_pointed_object((int *)count_ns, CMSE_NONSECURE);
-	if (count_ns == NULL)
-		return -EINVAL;
-
-	(*count_ns)++;
-
-	return 0;
-}
 
 static struct capi_uart_line_config uart_line_config = {
 	.baudrate = UART_BAUDRATE,

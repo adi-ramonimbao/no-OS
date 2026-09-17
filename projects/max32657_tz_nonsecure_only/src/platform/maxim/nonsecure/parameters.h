@@ -43,4 +43,8 @@
 #define LED_EXTRA_TYPE		struct max_capi_gpio_extra_config
 #define LED_EXTRA_INIT		{ .func = MAX_CAPI_GPIO_FUNC_OUT }
 
+/* Base of the Secure SRAM alias; a Non-Secure caller cannot access it. Used by
+ * the keystore example to provoke and reject accesses into Secure memory. */
+#define TZ_SECURE_SRAM_BASE	0x30000000U
+
 #endif /* __PARAMETERS_H__ */

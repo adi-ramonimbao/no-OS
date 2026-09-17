@@ -20,7 +20,9 @@
 include(maxim_trustzone)
 
 no_os_add_maxim_trustzone_app(max32657_tz_hello
-    SECURE_SRC     src/secure/main.c
-    SECURE_INC     src/secure            # holds partition_max32657.h + parameters.h
-    NONSECURE_SRC  src/nonsecure/main.c
-    NONSECURE_INC  src/nonsecure)
+    SECURE_SRC     src/platform/${PLATFORM}/secure/main.c
+                   src/examples/hello/hello_secure.c
+    SECURE_INC     src/platform/${PLATFORM}/secure    # holds partition_max32657.h + parameters.h
+    NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                   src/examples/hello/hello_nonsecure.c
+    NONSECURE_INC  src/platform/${PLATFORM}/nonsecure)

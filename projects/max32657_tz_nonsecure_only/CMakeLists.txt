@@ -49,7 +49,10 @@ endif()
 include(maxim_trustzone)
 
 no_os_add_maxim_trustzone_nonsecure_app(max32657_tz_nonsecure_only
-    NONSECURE_SRC  src/nonsecure/main.c
-    NONSECURE_INC  src/nonsecure
+    NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                   src/examples/keystore/keystore_nonsecure.c
+                   src/common/common_data.c
+    NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                   src/common
     SECURE_IMPLIB  ${TZ_SECURE_IMPLIB}
     SECURE_HEX     ${TZ_SECURE_HEX})

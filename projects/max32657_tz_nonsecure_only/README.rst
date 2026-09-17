@@ -19,7 +19,7 @@ import library and a contract; this project links against the import library so
 the gateway veneers resolve, and combines its Non-Secure image with the Secure
 HEX.
 
-What the Non-Secure world does (``src/nonsecure/main.c``) - an ordinary no-OS
+What the Non-Secure world does (``src/examples/keystore/keystore_nonsecure.c``) - an ordinary no-OS
 CAPI application on the handed-over peripherals: routes ``printf`` through the
 CAPI UART, then drives the Secure **keystore** across the boundary and shows the
 boundary holding, before blinking the board LED (P0.13) through CAPI GPIO every

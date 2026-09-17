@@ -22,5 +22,6 @@
 include(maxim_trustzone)
 
 no_os_add_maxim_trustzone_secure_app(max32657_tz_secure_only
-    SECURE_SRC  src/secure/main.c
-    SECURE_INC  src/secure)            # holds partition_max32657.h + parameters.h
+    SECURE_SRC  src/platform/${PLATFORM}/secure/main.c
+                src/examples/keystore/keystore_secure.c
+    SECURE_INC  src/platform/${PLATFORM}/secure)   # holds partition_max32657.h + parameters.h

@@ -5,14 +5,14 @@
  */
 
 /**
- * @file   main.c
- * @brief  Non-Secure-world consumer for the MAX32657 TrustZone split demo.
+ * @file   keystore_nonsecure.c
+ * @brief  Portable Non-Secure application for the TrustZone split demo.
  *
- * Built on its own (Non-Secure-only) and merged with a Secure image produced
- * elsewhere (max32657_tz_secure_only). Reached from the Secure world via
- * NonSecure_Init(), it runs an ordinary no-OS CAPI application on the delegated
- * peripherals: prints over the CAPI UART, then drives the Secure keystore
- * across the boundary and shows the boundary holding:
+ * An ordinary no-OS CAPI application on the delegated peripherals: prints
+ * over the CAPI UART, then drives the Secure keystore across the boundary and
+ * shows the boundary holding, before blinking the board LED as a heartbeat.
+ * Uses only CAPI plus parameters.h, so it is reused unchanged by any
+ * platform's Non-Secure world (called from platform/<platform>/nonsecure/main.c).
  *
  *   SELFTEST           - KeystoreSelfTest_S() has the Secure world check its key
  *                        against a Secure-held known-answer and return only
@@ -27,10 +27,9 @@
  *                        Secure world traps and recovers it, so execution
  *                        continues here and the fault counter confirms the trap.
  *
- * It then blinks the board LED through CAPI GPIO as a heartbeat. The gateways
- * are resolved at link time from the Secure import library (SECURE_IMPLIB);
- * each call lands on an SG veneer in the Non-Secure Callable region and
- * transitions into Secure state.
+ * The gateways are resolved at link time from the Secure import library
+ * (SECURE_IMPLIB); each call lands on an SG veneer in the Non-Secure Callable
+ * region and transitions into Secure state.
  */
 
 #include <stdio.h>
@@ -45,6 +44,7 @@
 #include "capi_time.h"
 #include "maxim_capi_uart.h"
 
+#include "common_data.h"
 #include "parameters.h"
 
 /* Secure gateways, resolved at link time from the Secure import library. The
@@ -61,9 +61,6 @@ extern uint32_t KeystoreFaultCount_S(void);
 #define TZ_KS_LEN		9U
 #define TZ_KS_INPUT		{ 0x54, 0x72, 0x75, 0x73, 0x74, 0x5A, 0x6F, 0x6E, 0x65 }
 
-/* Base of the Secure SRAM alias; a Non-Secure caller cannot access it. */
-#define TZ_SECURE_SRAM_BASE	0x30000000U
-
 /* Provoke a SecureFault by reading Secure memory from the Non-Secure world.
  * Naked so it has no prologue/epilogue: the faulting load is the whole body and
  * the Secure fault handler recovers by returning to the caller (PC <- LR). */
@@ -75,36 +72,6 @@ provoke_secure_read(volatile uint8_t *addr __attribute__((unused)))
 		"bx   lr        \n\t"
 	);
 }
-
-static struct capi_uart_line_config uart_line_config = {
-	.baudrate = UART_BAUDRATE,
-	.size = CAPI_UART_DATA_BITS_8,
-	.parity = CAPI_UART_PARITY_NONE,
-	.stop_bits = CAPI_UART_STOP_1_BIT,
-	.flow_control = CAPI_UART_FLOW_CONTROL_NONE,
-	.address_mode = CAPI_UART_ADDRESS_MODE_DISABLED,
-};
-
-static UART_EXTRA_TYPE uart_extra = UART_EXTRA_INIT;
-
-static const struct capi_uart_config uart_config = {
-	.identifier = UART_IDENTIFIER,
-	.dma_handle = NULL,
-	.clk_freq_hz = 0U,
-	.line_config = &uart_line_config,
-	.extra = &uart_extra,
-	.ops = UART_OPS,
-};
-
-static LED_EXTRA_TYPE led_extra = LED_EXTRA_INIT;
-
-static const struct capi_gpio_port_config led_port_config = {
-	.ops = LED_OPS,
-	.identifier = LED_IDENTIFIER,
-	.num_pins = LED_NUM_PINS,
-	.flags = NULL,
-	.extra = &led_extra,
-};
 
 static int failures;
 
@@ -170,7 +137,7 @@ static void test_reject_direct_read(void)
 	report("REJECT_DIRECT_READ", (after - before) == 1U);
 }
 
-int main(void)
+int example_main(void)
 {
 	struct capi_uart_handle *uart = NULL;
 	struct capi_gpio_port_handle *led_port = NULL;
@@ -181,7 +148,8 @@ int main(void)
 	if (ret)
 		return ret;
 
-	/* Route printf/stdio through the (now Non-Secure) CAPI UART. */
+	/* Route printf/stdio through the (now Non-Secure) CAPI UART. Maxim-only
+	 * extension call; the one line here tied to a specific platform. */
 	max_capi_uart_stdio_enable(uart);
 
 	ret = capi_gpio_port_init(&led_port, &led_port_config);

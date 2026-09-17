@@ -24,7 +24,8 @@ This contrasts with ``max32657_tz_hello`` / ``max32657_tz_selftest``, which link
 **both** worlds into one combined ELF in a single superbuild. Here the two
 worlds are produced by two separate builds around a shared contract.
 
-What the Secure world does (``src/secure/main.c``):
+What the Secure world does (``src/platform/maxim/secure/main.c`` for bring-up,
+``src/examples/keystore/keystore_secure.c`` for the gateways):
 
 * brings up the console UART through CAPI and prints a banner,
 * enables the SecureFault exception so a Non-Secure access to Secure memory is

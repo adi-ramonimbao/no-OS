@@ -37,12 +37,14 @@ set(_selftest_loopback ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/examples
 set(_selftest_maxim ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/platform/maxim)
 
 no_os_add_maxim_trustzone_app(max32657_tz_selftest
-    SECURE_SRC     src/secure/main.c
-    SECURE_INC     src/secure            # holds partition_max32657.h + parameters.h
-                   src                   # holds tz_gateways.h (shared contract)
-    NONSECURE_SRC  src/nonsecure/main.c
-                   src/nonsecure/tests/test_trustzone.c
-                   src/nonsecure/tests/test_dma_instance.c
+    SECURE_SRC     src/platform/${PLATFORM}/secure/main.c
+                   src/examples/selftest/selftest_secure.c
+    SECURE_INC     src/platform/${PLATFORM}/secure    # holds partition_max32657.h + parameters.h
+                   src/examples/selftest              # holds tz_gateways.h (shared contract)
+    NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                   src/platform/${PLATFORM}/nonsecure/tests/test_dma_instance.c
+                   src/examples/selftest/selftest_nonsecure.c
+                   src/examples/selftest/tests/test_trustzone.c
                    ${_selftest_common}/common_data.c
                    ${_selftest_common}/test_framework.c
                    ${_selftest_loopback}/tests/test_gpio.c
@@ -52,8 +54,8 @@ no_os_add_maxim_trustzone_app(max32657_tz_selftest
                    ${_selftest_loopback}/tests/test_i2c.c
                    ${_selftest_loopback}/tests/test_uart.c
                    ${_selftest_loopback}/tests/test_dma.c
-    NONSECURE_INC  src/nonsecure
-                   src                   # holds tz_gateways.h (shared contract)
+    NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                   src/examples/selftest              # holds tz_gateways.h (shared contract)
                    ${_selftest_common}
                    ${_selftest_loopback}
                    ${_selftest_maxim})     # full maxim capi_selftest parameters.h

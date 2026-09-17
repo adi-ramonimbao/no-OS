@@ -36,13 +36,17 @@
  * All are recorded in the emitted import library (<name>_implib.o). The cipher
  * is a trivial repeating-key XOR standing in for a real Secure operation; the
  * security feature on show is the boundary, not the cipher.
+ *
+ * KeystoreTransform_S() and KeystoreSelfTest_S() are defined in
+ * src/examples/keystore/keystore_secure.c, which uses no platform header and
+ * is reused unchanged by any platform's Secure world. KeystoreFaultCount_S()
+ * stays here because it shares state with SecureFault_Handler() below, which
+ * does depend on the vendor device header.
  */
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stddef.h>
-#include <errno.h>
 
 #include "mxc.h"
 #include "spc.h"
@@ -53,70 +57,8 @@
 
 #include "parameters.h"
 
-/*
- * The protected asset. It lives in Secure memory and no gateway ever returns
- * it: the Non-Secure world can drive the transform but can never read these
- * bytes. KeystoreSelfTest_S() checks the key against a Secure-held known-answer,
- * so the Non-Secure consumer needs no reference answer of its own.
- */
-static const uint8_t secret_key[] = { 0xA5, 0x5A, 0x3C, 0xC3 };
-
 /* Count of Non-Secure security violations trapped by SecureFault_Handler(). */
 static volatile uint32_t secure_fault_count;
-
-/* Apply the Secure-held key in place (repeating-key XOR). File-local so the
- * transform gateway and the self-test perform the identical operation. */
-static void keystore_apply_key(uint8_t *buf, size_t len)
-{
-	for (size_t i = 0U; i < len; i++)
-		buf[i] ^= secret_key[i % sizeof(secret_key)];
-}
-
-/* Secure gateway: transform a Non-Secure buffer with the Secure-held key.
- * __ns_entry expands to __attribute((cmse_nonsecure_entry)); the linker emits
- * an SG veneer for it in the Non-Secure Callable region and records it in the
- * import library. */
-__ns_entry int KeystoreTransform_S(uint8_t *buf_ns, size_t len)
-{
-	/* Validate the whole Non-Secure buffer before touching it: on a failed
-	 * check cmse_check_address_range() returns NULL, so a Non-Secure caller
-	 * cannot trick the Secure key into reading or writing Secure memory. */
-	buf_ns = cmse_check_address_range(buf_ns, len, CMSE_NONSECURE);
-	if (buf_ns == NULL)
-		return -EINVAL;
-
-	keystore_apply_key(buf_ns, len);
-
-	return 0;
-}
-
-/* Secure gateway: verify the provisioned key against a known-answer entirely
- * inside the Secure world. The plaintext and expected ciphertext never leave
- * Secure memory - only the boolean result crosses out - so the Non-Secure app
- * can confirm the key is correct without holding any reference answer itself.
- * Returns 0 on match, -1 on mismatch. */
-__ns_entry int KeystoreSelfTest_S(void)
-{
-	static const uint8_t kat_plaintext[] = {
-		0x54, 0x72, 0x75, 0x73, 0x74, 0x5A, 0x6F, 0x6E, 0x65
-	};
-	static const uint8_t kat_ciphertext[] = {
-		0xF1, 0x28, 0x49, 0xB0, 0xD1, 0x00, 0x53, 0xAD, 0xC0
-	};
-	uint8_t buf[sizeof(kat_plaintext)];
-	uint8_t diff = 0U;
-	size_t i;
-
-	for (i = 0U; i < sizeof(buf); i++)
-		buf[i] = kat_plaintext[i];
-
-	keystore_apply_key(buf, sizeof(buf));
-
-	for (i = 0U; i < sizeof(buf); i++)
-		diff |= buf[i] ^ kat_ciphertext[i];
-
-	return diff ? -1 : 0;
-}
 
 /* Secure gateway: report the running count of trapped security faults. */
 __ns_entry uint32_t KeystoreFaultCount_S(void)
