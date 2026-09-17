@@ -198,9 +198,18 @@ endif()
 # activates the SAU/veneer code paths); the non-secure side must NOT get it.
 # Each side also links against a different linker script (see the linker flags
 # below): <target>_s.ld / <target>_ns.ld, versus the plain <target>.ld default.
+# MAX32657 is the only Maxim part wired for TrustZone (Cortex-M4 parts have no
+# CMSE extension at all), so reject MSECURITY_MODE on anything else with a
+# clear message instead of letting -mcmse reach a Cortex-M4 compile and fail
+# with an opaque GCC error.
 set(TZ_CMSE_FLAGS "")
 set(LINKER_SCRIPT_SUFFIX "")
 if(DEFINED MSECURITY_MODE)
+    if(NOT TARGET_NUM STREQUAL "32657")
+        message(FATAL_ERROR
+            "MSECURITY_MODE is set but TARGET_NUM='${TARGET_NUM}' is not a "
+            "TrustZone-capable Maxim part (only MAX32657/Cortex-M33 supports it).")
+    endif()
     if(MSECURITY_MODE STREQUAL "SECURE")
         set(TZ_CMSE_FLAGS "-mcmse")
         set(LINKER_SCRIPT_SUFFIX "_s")

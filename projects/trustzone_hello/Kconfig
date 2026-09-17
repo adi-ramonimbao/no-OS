@@ -1,0 +1,7 @@
+menu "trustzone_hello Configuration"
+
+comment "TrustZone hello demo: no build-time options. The Secure/Non-Secure"
+comment "split is driven by MSECURITY_MODE and the superbuild CMakeLists."
+comment "See projects/trustzone_hello/README.rst."
+
+endmenu

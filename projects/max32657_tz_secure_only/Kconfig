@@ -1,7 +1,0 @@
-menu "max32657_tz_secure_only Configuration"
-
-comment "Secure-only TrustZone producer: no build-time options. The Secure"
-comment "world is emitted as separate deliverables (HEX + implib + contract)"
-comment "for a Non-Secure app built elsewhere. See the project README."
-
-endmenu

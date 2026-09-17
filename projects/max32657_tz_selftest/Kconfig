@@ -1,7 +1,0 @@
-menu "max32657_tz_selftest Configuration"
-
-comment "TrustZone CAPI self-test: no build-time options. The Secure/Non-Secure"
-comment "split is driven by MSECURITY_MODE and the superbuild CMakeLists."
-comment "See projects/max32657_tz_selftest/README.rst."
-
-endmenu
