@@ -43,6 +43,10 @@
 #define LED_EXTRA_TYPE		struct max_capi_gpio_extra_config
 #define LED_EXTRA_INIT		{ .func = MAX_CAPI_GPIO_FUNC_OUT }
 
+/* Resolves the one platform-specific line keystore_nonsecure.c needs: routing
+ * printf/stdio through the CAPI UART handle. */
+#define CAPI_UART_STDIO_ENABLE(h)	max_capi_uart_stdio_enable(h)
+
 /* Base of the Secure SRAM alias; a Non-Secure caller cannot access it. Used by
  * the keystore example to provoke and reject accesses into Secure memory. */
 #define TZ_SECURE_SRAM_BASE	0x30000000U

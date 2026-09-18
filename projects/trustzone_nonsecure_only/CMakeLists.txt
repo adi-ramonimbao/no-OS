@@ -1,5 +1,5 @@
 # =============================================================================
-# MAX32657 TrustZone Non-Secure-only CONSUMER demo.
+# TrustZone Non-Secure-only CONSUMER demo - platform-neutral project.
 #
 # Builds only the Non-Secure world and combines it with a Secure image produced
 # elsewhere (trustzone_secure_only) into one flashable HEX. The Secure world is
@@ -8,7 +8,7 @@
 #
 # Point at the Secure deliverables one of two ways:
 #   (a) include the producer's emitted contract, which sets both paths:
-#         cmake --preset max32657evkit -B build-ns \
+#         cmake --preset <board-preset> -B build-ns \
 #           -DPROJECT_DEFCONFIG=trustzone_nonsecure_only/nonsecure.conf \
 #           -DSECURE_CONTRACT=/abs/path/to/trustzone_secure_only_contract.cmake
 #   (b) pass the paths directly:
@@ -17,7 +17,8 @@
 #   cmake --build build-ns --target trustzone_nonsecure_only
 #
 # The outer build runs in the Non-Secure world (MSECURITY_MODE=NONSECURE), set by
-# trustzone.cmake here, so the plain board preset works.
+# trustzone.cmake here, so the plain board preset works. Board presets:
+# max32657evkit (Maxim) or nucleo-h563zi (STM32).
 # =============================================================================
 
 # Resolve the Secure deliverables: a producer contract (sets TZ_SECURE_HEX /
@@ -46,13 +47,26 @@ if(SECURE_IMPLIB)
     set(TZ_SECURE_IMPLIB ${SECURE_IMPLIB})
 endif()
 
-include(maxim_trustzone)
-
-no_os_add_maxim_trustzone_nonsecure_app(trustzone_nonsecure_only
-    NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
-                   src/examples/keystore/keystore_nonsecure.c
-                   src/common/common_data.c
-    NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
-                   src/common
-    SECURE_IMPLIB  ${TZ_SECURE_IMPLIB}
-    SECURE_HEX     ${TZ_SECURE_HEX})
+if(PLATFORM STREQUAL "maxim")
+    include(maxim_trustzone)
+    no_os_add_maxim_trustzone_nonsecure_app(trustzone_nonsecure_only
+        NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                       src/examples/keystore/keystore_nonsecure.c
+                       src/common/common_data.c
+        NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                       src/common
+        SECURE_IMPLIB  ${TZ_SECURE_IMPLIB}
+        SECURE_HEX     ${TZ_SECURE_HEX})
+elseif(PLATFORM STREQUAL "stm32")
+    include(stm32_trustzone)
+    no_os_add_stm32_trustzone_nonsecure_app(trustzone_nonsecure_only
+        NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                       src/examples/keystore/keystore_nonsecure.c
+                       src/common/common_data.c
+        NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                       src/common
+        SECURE_IMPLIB  ${TZ_SECURE_IMPLIB}
+        SECURE_HEX     ${TZ_SECURE_HEX})
+else()
+    message(FATAL_ERROR "trustzone_nonsecure_only: unsupported PLATFORM '${PLATFORM}' (supported: maxim, stm32).")
+endif()

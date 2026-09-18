@@ -42,7 +42,6 @@
 #include "capi_uart.h"
 #include "capi_gpio.h"
 #include "capi_time.h"
-#include "maxim_capi_uart.h"
 
 #include "common_data.h"
 #include "parameters.h"
@@ -148,9 +147,9 @@ int example_main(void)
 	if (ret)
 		return ret;
 
-	/* Route printf/stdio through the (now Non-Secure) CAPI UART. Maxim-only
-	 * extension call; the one line here tied to a specific platform. */
-	max_capi_uart_stdio_enable(uart);
+	/* Route printf/stdio through the (now Non-Secure) CAPI UART. Resolved
+	 * per platform via parameters.h. */
+	CAPI_UART_STDIO_ENABLE(uart);
 
 	ret = capi_gpio_port_init(&led_port, &led_port_config);
 	if (ret)

@@ -30,32 +30,61 @@
 #   cmake --build build --target trustzone_selftest
 # =============================================================================
 
-include(maxim_trustzone)
-
 set(_selftest_common  ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/common)
 set(_selftest_loopback ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/examples/capi_loopback)
 set(_selftest_maxim ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/platform/maxim)
+set(_selftest_stm32 ${CMAKE_CURRENT_SOURCE_DIR}/../capi_selftest/src/platform/stm32)
 
-no_os_add_maxim_trustzone_app(trustzone_selftest
-    SECURE_SRC     src/platform/${PLATFORM}/secure/main.c
-                   src/examples/selftest/selftest_secure.c
-    SECURE_INC     src/platform/${PLATFORM}/secure    # holds partition_max32657.h + parameters.h
-                   src/examples/selftest              # holds tz_gateways.h (shared contract)
-    NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
-                   src/platform/${PLATFORM}/nonsecure/tests/test_dma_instance.c
-                   src/examples/selftest/selftest_nonsecure.c
-                   src/examples/selftest/tests/test_trustzone.c
-                   ${_selftest_common}/common_data.c
-                   ${_selftest_common}/test_framework.c
-                   ${_selftest_loopback}/tests/test_gpio.c
-                   ${_selftest_loopback}/tests/test_irq.c
-                   ${_selftest_loopback}/tests/test_spi.c
-                   ${_selftest_loopback}/tests/test_timer.c
-                   ${_selftest_loopback}/tests/test_i2c.c
-                   ${_selftest_loopback}/tests/test_uart.c
-                   ${_selftest_loopback}/tests/test_dma.c
-    NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
-                   src/examples/selftest              # holds tz_gateways.h (shared contract)
-                   ${_selftest_common}
-                   ${_selftest_loopback}
-                   ${_selftest_maxim})     # full maxim capi_selftest parameters.h
+if(PLATFORM STREQUAL "maxim")
+    include(maxim_trustzone)
+    no_os_add_maxim_trustzone_app(trustzone_selftest
+        SECURE_SRC     src/platform/${PLATFORM}/secure/main.c
+                       src/examples/selftest/selftest_secure.c
+        SECURE_INC     src/platform/${PLATFORM}/secure    # holds partition_max32657.h + parameters.h
+                       src/examples/selftest              # holds tz_gateways.h (shared contract)
+        NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                       src/platform/${PLATFORM}/nonsecure/tests/test_dma_instance.c
+                       src/examples/selftest/selftest_nonsecure.c
+                       src/examples/selftest/tests/test_trustzone.c
+                       ${_selftest_common}/common_data.c
+                       ${_selftest_common}/test_framework.c
+                       ${_selftest_loopback}/tests/test_gpio.c
+                       ${_selftest_loopback}/tests/test_irq.c
+                       ${_selftest_loopback}/tests/test_spi.c
+                       ${_selftest_loopback}/tests/test_timer.c
+                       ${_selftest_loopback}/tests/test_i2c.c
+                       ${_selftest_loopback}/tests/test_uart.c
+                       ${_selftest_loopback}/tests/test_dma.c
+        NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                       src/examples/selftest              # holds tz_gateways.h (shared contract)
+                       ${_selftest_common}
+                       ${_selftest_loopback}
+                       ${_selftest_maxim})     # full maxim capi_selftest parameters.h
+elseif(PLATFORM STREQUAL "stm32")
+    include(stm32_trustzone)
+    no_os_add_stm32_trustzone_app(trustzone_selftest
+        SECURE_SRC     src/platform/${PLATFORM}/secure/main.c
+                       src/examples/selftest/selftest_secure.c
+        SECURE_INC     src/platform/${PLATFORM}/secure
+                       src/examples/selftest
+        NONSECURE_SRC  src/platform/${PLATFORM}/nonsecure/main.c
+                       src/platform/${PLATFORM}/nonsecure/tests/test_dma_instance.c
+                       ${_selftest_stm32}/i2c_platform_init.c
+                       src/examples/selftest/selftest_nonsecure.c
+                       src/examples/selftest/tests/test_trustzone.c
+                       ${_selftest_common}/common_data.c
+                       ${_selftest_common}/test_framework.c
+                       ${_selftest_loopback}/tests/test_gpio.c
+                       ${_selftest_loopback}/tests/test_irq.c
+                       ${_selftest_loopback}/tests/test_spi.c
+                       ${_selftest_loopback}/tests/test_timer.c
+                       ${_selftest_loopback}/tests/test_i2c.c
+                       ${_selftest_loopback}/tests/test_uart.c
+                       ${_selftest_loopback}/tests/test_dma.c
+        NONSECURE_INC  src/platform/${PLATFORM}/nonsecure
+                       src/examples/selftest
+                       ${_selftest_common}
+                       ${_selftest_loopback})
+else()
+    message(FATAL_ERROR "trustzone_selftest: unsupported PLATFORM '${PLATFORM}' (supported: maxim, stm32).")
+endif()

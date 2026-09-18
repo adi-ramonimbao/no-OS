@@ -38,11 +38,13 @@
 #define TZ_MODULE		"TRUSTZONE"
 
 /*
- * Base of the Secure SRAM alias on the MAX32657 (see the Secure memory layout).
- * A Non-Secure caller cannot access this region, so the gateway's CMSE check
- * must reject a pointer into it. Never dereferenced from the Non-Secure world.
+ * Base of a Secure-only SRAM alias/address on the active platform.
+ * parameters.h may override this per platform; default keeps the existing
+ * MAX32657 address used by this test.
  */
+#ifndef TZ_SECURE_SRAM_BASE
 #define TZ_SECURE_SRAM_BASE	0x30000000u
+#endif /* TZ_SECURE_SRAM_BASE */
 
 /**
  * @brief GetSecureMagic_S() returns the Secure-owned constant.

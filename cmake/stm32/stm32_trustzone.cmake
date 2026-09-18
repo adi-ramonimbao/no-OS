@@ -121,6 +121,21 @@ function(_no_os_stm32_tz_patch_main GEN_DIR)
     file(READ "${_gen_cmake}" _gen_content)
     string(REGEX REPLACE "[^\n]*syscalls\\.c[^\n]*\n" "" _gen_content "${_gen_content}")
     file(WRITE "${_gen_cmake}" "${_gen_content}")
+
+    # CubeMX generates its own do-nothing SecureFault_Handler() (an infinite
+    # loop) into the Secure world's Core/Src/stm32h5xx_it.c. Weaken it so a
+    # project's own strong definition (e.g. trustzone_secure_only's
+    # src/platform/stm32/secure/main.c) can override it -- a plain second
+    # definition would be a multiple-definition link error. No-op on the
+    # Non-Secure tree: that world's stm32h5xx_it.c never defines this handler.
+    set(_it "${GEN_DIR}/Core/Src/stm32h5xx_it.c")
+    if(EXISTS "${_it}")
+        file(READ "${_it}" _it_content)
+        string(REPLACE "void SecureFault_Handler(void)"
+            "void __attribute__((weak)) SecureFault_Handler(void)"
+            _it_content "${_it_content}")
+        file(WRITE "${_it}" "${_it_content}")
+    endif()
 endfunction()
 
 # Ensure STM32CubeMX has generated the Secure/NonSecure project pair for this
