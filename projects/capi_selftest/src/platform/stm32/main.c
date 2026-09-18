@@ -17,17 +17,22 @@ extern int example_main(void);
 /*
  * GPIO-interrupt platform hooks for the capi_loopback IRQ test.
  *
- * The suite drives the loopback output pin (PE0) and observes the edge arrive
- * on the wired input pin (PC0) through the CAPI IRQ contract. Everything the
- * test touches goes through capi_irq_*; these hooks supply only the part CAPI
- * cannot express portably: routing PC0 to an EXTI line, telling the test which
- * CAPI IRQ number to connect, and clearing the pin as the source.
+ * The suite drives the loopback output pin and observes the edge arrive on
+ * the wired input pin through the CAPI IRQ contract. Everything the test
+ * touches goes through capi_irq_*; these hooks supply only the part CAPI
+ * cannot express portably: routing the input pin to an EXTI line, telling the
+ * test which CAPI IRQ number to connect, and clearing the pin as the source.
  *
- * PC0 is EXTI line 0, so the CAPI IRQ number is EXTI0_IRQn. The test drives a
- * low->high transition, hence a rising-edge trigger.
+ * Both boards wire the input pin to bit 0 of its port (PC0 on NUCLEO-F767ZI,
+ * PG0 on NUCLEO-H563ZI), so it's EXTI line 0 -> EXTI0_IRQn either way. The
+ * test drives a low->high transition, hence a rising-edge trigger.
  */
-#define GPIO_IRQ_PIN		GPIO_PIN_0	/* PC0 -> EXTI line 0 */
-#define GPIO_IRQ_PORT		GPIOC
+#define GPIO_IRQ_PIN		GPIO_PIN_0	/* input pin's bit 0 -> EXTI line 0 */
+#if defined(STM32H5)
+#define GPIO_IRQ_PORT		GPIOG		/* PG0 on NUCLEO-H563ZI */
+#else
+#define GPIO_IRQ_PORT		GPIOC		/* PC0 on NUCLEO-F767ZI */
+#endif
 #define GPIO_IRQ_IRQN		EXTI0_IRQn
 
 /**
@@ -47,9 +52,15 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 	if (!irq_line)
 		return -EINVAL;
 
-	/* EXTI line routing lives in SYSCFG; the pin lives on GPIOC. */
+	/* EXTI line routing lives in SYSCFG ("SBS" on STM32H5); the pin lives
+	 * on GPIO_IRQ_PORT. */
+#if defined(STM32H5)
+	__HAL_RCC_SBS_CLK_ENABLE();
+	__HAL_RCC_GPIOG_CLK_ENABLE();
+#else
 	__HAL_RCC_SYSCFG_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
+#endif
 
 	/*
 	 * GPIO_MODE_IT_RISING wires SYSCFG EXTICR line 0 to port C and sets the
@@ -97,7 +108,11 @@ bool platform_gpio_irq_ack(void)
  */
 void platform_gpio_irq_disarm(void)
 {
+#if defined(STM32H5)
+	EXTI->IMR1 &= ~GPIO_IRQ_PIN;
+#else
 	EXTI->IMR &= ~GPIO_IRQ_PIN;
+#endif
 	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_IRQ_PIN);
 	HAL_NVIC_ClearPendingIRQ(GPIO_IRQ_IRQN);
 }

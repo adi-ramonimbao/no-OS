@@ -30,33 +30,47 @@ extern SPI_HandleTypeDef hspi1;
 #define PLATFORM_NAME		"STM32"
 
 /*
- * GPIO loopback pair on NUCLEO-F767ZI:
- *   PE0 (output, GPIOE pin 0) wired to PC0 (input, GPIOC pin 0).
- * Each port is opened with num_pins=1 so bit 0 maps to physical pin 0.
+ * GPIO loopback pair.
  *
- * Both endpoints are physical pin 0: the port tests configure only bit 0
- * (num_pins=1) and the pin-loopback arrays are {0}; the input pin's line 0
- * routes to EXTI0 for the IRQ suite. PC0 replaces PF0 because PF0 is NOT
- * broken out on the Nucleo-144 header (it is tied to the ST-LINK MCU for
- * MCO/HSE-bypass). PC0 is exposed on the Arduino header as A1 and is unused
- * by any other peripheral in this design.
- *
+ * NUCLEO-F767ZI: PE0 (output, GPIOE pin 0) wired to PC0 (input, GPIOC pin 0).
+ * PC0 replaces PF0 because PF0 is NOT broken out on the Nucleo-144 header (it
+ * is tied to the ST-LINK MCU for MCO/HSE-bypass); PC0 is exposed on the
+ * Arduino header as A1 and is unused by any other peripheral in this design.
  *   Jumper: PE0 (CN10/D34) <-> PC0 (CN9, Arduino A1)
+ *
+ * NUCLEO-H563ZI: PD0 (output) wired to PG0 (input); both free on the Morpho
+ * header and unused by SPI1/USART3/I2C1/I2C2 in this design.
+ *   Jumper: PD0 <-> PG0
+ *
+ * Each port is opened with num_pins=1 so bit 0 maps to physical pin 0. Both
+ * endpoints are physical pin 0: the port tests configure only bit 0 and the
+ * pin-loopback arrays are {0}; the input pin's line 0 routes to its EXTI line
+ * for the IRQ suite.
  */
+#if defined(STM32H5)
+#define GPIO_OUTPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOD)
+#define GPIO_OUTPUT_NAME		"PD0"
+#else
 #define GPIO_OUTPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOE)
+#define GPIO_OUTPUT_NAME		"PE0"
+#endif
 #define GPIO_OUTPUT_NUM_PINS		1U
 #define GPIO_OUTPUT_OPS			&stm32_capi_gpio_ops
-#define GPIO_OUTPUT_NAME		"PE0"
 #define GPIO_OUTPUT_EXTRA		struct stm32_capi_gpio_port_config
 #define GPIO_OUTPUT_EXTRA_INIT		{ .mode = GPIO_MODE_OUTPUT_PP, \
 					  .speed = GPIO_SPEED_FREQ_LOW, \
 					  .alternate = 0U, \
 					  .pull = GPIO_NOPULL }
 
+#if defined(STM32H5)
+#define GPIO_INPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOG)
+#define GPIO_INPUT_NAME			"PG0"
+#else
 #define GPIO_INPUT_IDENTIFIER		((uint64_t)(uintptr_t)GPIOC)
+#define GPIO_INPUT_NAME			"PC0"
+#endif
 #define GPIO_INPUT_NUM_PINS		1U
 #define GPIO_INPUT_OPS			&stm32_capi_gpio_ops
-#define GPIO_INPUT_NAME			"PC0"
 #define GPIO_INPUT_EXTRA		struct stm32_capi_gpio_port_config
 #define GPIO_INPUT_EXTRA_INIT		{ .mode = GPIO_MODE_INPUT, \
 					  .speed = GPIO_SPEED_FREQ_LOW, \
@@ -85,9 +99,9 @@ extern SPI_HandleTypeDef hspi1;
 #define IRQ_CTRL_IDENTIFIER		0U
 
 /*
- * SPI1 on NUCLEO-F767ZI:
- *   PA5 = SCK, PA6 = MISO, PA7 = MOSI
- *   External loopback requires PA7 physically wired to PA6.
+ * SPI1: PA5 = SCK, PB5 = MOSI, PG9 = MISO on NUCLEO-H563ZI;
+ *       PA5 = SCK, PA6 = MISO, PA7 = MOSI on NUCLEO-F767ZI.
+ * External loopback requires MOSI physically wired to MISO.
  */
 #define SPI_IDENTIFIER		((uint64_t)(uintptr_t)SPI1)
 #define SPI_OPS			&stm32_capi_spi_ops
@@ -99,16 +113,21 @@ extern SPI_HandleTypeDef hspi1;
 				  .rxdma_ch_id = 0U, \
 				  .txdma_ch_id = 0U, \
 				  .irq_num = SPI1_IRQn }
+#if defined(STM32H5)
+#define SPI_CLK_FREQ		250000000U
+#else
 #define SPI_CLK_FREQ		96000000U
+#endif
 
 #define SPI_DEVICE_NATIVE_CS	0x01U
 #define SPI_DEVICE_MODE		CAPI_SPI_MODE_0
 #define SPI_DEVICE_SPEED_HZ	1000000U
 
 /*
- * TIM2 on NUCLEO-F767ZI: 32-bit general-purpose timer on APB1.
- * The driver uses identifier=2 to select TIM2 via get_timer_base_from_identifier()
- * and auto-detects the APB1 clock. output_freq_hz=1 MHz gives 1 us resolution.
+ * TIM2: 32-bit general-purpose timer on APB1, on both NUCLEO-F767ZI and
+ * NUCLEO-H563ZI. The driver uses identifier=2 to select TIM2 via
+ * get_timer_base_from_identifier() and auto-detects the APB1 clock.
+ * output_freq_hz=1 MHz gives 1 us resolution.
  */
 #define TIMER_IDENTIFIER	2U
 #define TIMER_OPS		&stm32_capi_timer_ops
@@ -142,24 +161,33 @@ extern SPI_HandleTypeDef hspi1;
 #define TIMER_HAS_COMPARE	1
 
 /*
- * I2C initiator/target loopback on NUCLEO-F767ZI:
- *   Initiator = I2C1, target = I2C2, wired PB6/PB9 (I2C1) <-> PB10/PB11 (I2C2).
+ * I2C initiator/target loopback:
+ *   Initiator = I2C1, target = I2C2.
+ *   NUCLEO-H563ZI: PB6/PB7 (I2C1) <-> PB10/PB12 (I2C2).
+ *   NUCLEO-F767ZI: PB6/PB9 (I2C1) <-> PB10/PB11 (I2C2).
  * CubeMX only sets up I2C1, so i2c_platform_init() brings up I2C2's clock,
  * pins and NVIC and installs the IRQ vectors that dispatch to capi_i2c_isr;
  * the test calls I2C_PLATFORM_SET_TARGET() after init so those vectors reach
- * the target handle.
+ * the target handle. Timing values are per-board (computed by CubeMX's I2C
+ * wizard for each board's I2C kernel clock; not portable between boards).
  */
+#if defined(STM32H5)
+#define I2C_TIMING		0x60808CD3
+#else
+#define I2C_TIMING		0x20303E5D
+#endif
+
 #define I2C_IDENTIFIER		1U
 #define I2C_OPS			&stm32_capi_i2c_ops
 #define I2C_EXTRA_TYPE		struct stm32_i2c_extra_config
-#define I2C_EXTRA_INIT		{ .hi2c = NULL, .i2c_timing = 0x20303E5D }
+#define I2C_EXTRA_INIT		{ .hi2c = NULL, .i2c_timing = I2C_TIMING }
 #define I2C_TARGET_ADDR		0x42U
 #define I2C_HAS_IRQ		0
 
 #define I2C_TARGET_IDENTIFIER	2U
 #define I2C_TARGET_OPS		&stm32_capi_i2c_ops
 #define I2C_TARGET_EXTRA_TYPE	struct stm32_i2c_extra_config
-#define I2C_TARGET_EXTRA_INIT	{ .hi2c = NULL, .i2c_timing = 0x20303E5D }
+#define I2C_TARGET_EXTRA_INIT	{ .hi2c = NULL, .i2c_timing = I2C_TIMING }
 
 struct capi_i2c_controller_handle;
 int i2c_platform_init(void);
@@ -170,8 +198,12 @@ void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle);
 #define I2C_PLATFORM_SET_TARGET(h)	i2c_platform_set_target_handle(h)
 
 /*
- * DMA2 on NUCLEO-F767ZI: only DMA2 supports memory-to-memory transfers.
- * Stream 0, channel 0 is used (no peripheral trigger needed for mem-to-mem).
+ * DMA mem-to-mem transfer, no peripheral trigger needed:
+ *   NUCLEO-H563ZI: GPDMA1 channel 0 (GPDMA1 is the only DMA controller on
+ *   STM32H5; its Init struct uses Src/Dest-relative fields, populated by
+ *   stm32_capi_dma.c's #if defined(STM32H5) branch).
+ *   NUCLEO-F767ZI: DMA2 stream 0, channel 0 (only DMA2 supports
+ *   memory-to-memory transfers on STM32F7).
  * Polling mode (irq_num=0): the driver blocks in xfer_start until the
  * transfer completes — no interrupt infrastructure required.
  */
@@ -179,6 +211,18 @@ void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle);
 #define DMA_IDENTIFIER		0U
 #define DMA_NUM_CHANS		1U
 #define DMA_XFER_EXTRA_TYPE	struct stm32_dma_chan_extra_config
+#if defined(STM32H5)
+#define DMA_XFER_EXTRA_INIT	{ .hdma = &(DMA_HandleTypeDef){ \
+					.Instance = GPDMA1_Channel0 }, \
+				  .ch_num = 0U, \
+				  .mem_increment = true, \
+				  .per_increment = true, \
+				  .mem_data_alignment = CAPI_DMA_DATA_ALIGN_BYTE, \
+				  .per_data_alignment = CAPI_DMA_DATA_ALIGN_BYTE, \
+				  .dma_mode = CAPI_DMA_NORMAL_MODE, \
+				  .trig = NULL }
+#define DMA_PLATFORM_INIT()	__HAL_RCC_GPDMA1_CLK_ENABLE()
+#else
 #define DMA_XFER_EXTRA_INIT	{ .hdma = &(DMA_HandleTypeDef){ \
 					.Instance = DMA2_Stream0 }, \
 				  .ch_num = DMA_CHANNEL_0, \
@@ -189,6 +233,7 @@ void i2c_platform_set_target_handle(struct capi_i2c_controller_handle *handle);
 				  .dma_mode = CAPI_DMA_NORMAL_MODE, \
 				  .trig = NULL }
 #define DMA_PLATFORM_INIT()	__HAL_RCC_DMA2_CLK_ENABLE()
+#endif
 #define DMA_XFER_SIZE		64U
 
 #endif /* __PARAMETERS_H__ */

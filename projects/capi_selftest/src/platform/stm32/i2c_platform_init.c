@@ -11,8 +11,14 @@
  * must call i2c_platform_set_target_handle() after capi_i2c_init() so that
  * the IRQ vectors can reach the correct controller handle.
  *
- * Wiring: PB10 (I2C2_SCL) <-> PB6 (I2C1_SCL)
- *         PB11 (I2C2_SDA) <-> PB9 (I2C1_SDA)
+ * Wiring:
+ *   NUCLEO-H563ZI: PB10 (I2C2_SCL) <-> PB6 (I2C1_SCL)
+ *                  PB12 (I2C2_SDA) <-> PB7 (I2C1_SDA)
+ *   NUCLEO-F767ZI: PB10 (I2C2_SCL) <-> PB6 (I2C1_SCL)
+ *                  PB11 (I2C2_SDA) <-> PB9 (I2C1_SDA)
+ * Both boards use GPIO_AF4_I2C1/GPIO_AF4_I2C2 (confirmed from each board's
+ * own CubeMX-generated I2C1 MspInit, and from a temporary CubeMX-enabled
+ * I2C2 on the H563ZI, since CubeMX never generates I2C2 MSP code itself).
  *
  * Copyright (c) 2026 Analog Devices, Inc.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -21,6 +27,14 @@
 #include <stddef.h>
 #include "stm32_hal.h"
 #include "capi_i2c.h"
+
+#if defined(STM32H5)
+#define I2C2_SDA_PIN	GPIO_PIN_12
+#define I2C1_SDA_PIN	GPIO_PIN_7
+#else
+#define I2C2_SDA_PIN	GPIO_PIN_11
+#define I2C1_SDA_PIN	GPIO_PIN_9
+#endif
 
 static struct capi_i2c_controller_handle *i2c2_handle;
 
@@ -37,14 +51,14 @@ int i2c_platform_init(void)
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 	__HAL_RCC_I2C2_CLK_ENABLE();
 
-	gpio_init.Pin = GPIO_PIN_10 | GPIO_PIN_11;
+	gpio_init.Pin = GPIO_PIN_10 | I2C2_SDA_PIN;
 	gpio_init.Mode = GPIO_MODE_AF_OD;
 	gpio_init.Pull = GPIO_PULLUP;
 	gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	gpio_init.Alternate = GPIO_AF4_I2C2;
 	HAL_GPIO_Init(GPIOB, &gpio_init);
 
-	gpio_init.Pin = GPIO_PIN_6 | GPIO_PIN_9;
+	gpio_init.Pin = GPIO_PIN_6 | I2C1_SDA_PIN;
 	gpio_init.Mode = GPIO_MODE_AF_OD;
 	gpio_init.Pull = GPIO_PULLUP;
 	gpio_init.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -65,7 +79,7 @@ void i2c_platform_deinit(void)
 {
 	HAL_NVIC_DisableIRQ(I2C2_EV_IRQn);
 	HAL_NVIC_DisableIRQ(I2C2_ER_IRQn);
-	HAL_GPIO_DeInit(GPIOB, GPIO_PIN_10 | GPIO_PIN_11);
+	HAL_GPIO_DeInit(GPIOB, GPIO_PIN_10 | I2C2_SDA_PIN);
 	i2c2_handle = NULL;
 }
 
