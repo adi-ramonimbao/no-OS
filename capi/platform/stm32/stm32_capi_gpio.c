@@ -525,8 +525,13 @@ static int stm32_capi_gpio_port_get_raw_value(struct capi_gpio_port_handle
 
 	priv = handle->priv;
 
-	/* Read input data register */
+	/* Read input data register. Macro casing is family-specific: STM32H5
+	 * defines GPIO_PIN_ALL, other families define GPIO_PIN_All. */
+#if defined(STM32H5)
 	*value_bitmask = priv->port->IDR & GPIO_PIN_ALL;
+#else
+	*value_bitmask = priv->port->IDR & GPIO_PIN_All;
+#endif
 
 	return 0;
 }

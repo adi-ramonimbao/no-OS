@@ -261,6 +261,40 @@ static int stm32_capi_dma_deinit_chan(struct capi_dma_chan *chan)
 	return 0;
 }
 
+#if defined(STM32H5)
+/*
+ * GPDMA's DMA_InitTypeDef has no MemDataAlignment/PeriphDataAlignment (those
+ * only exist on classic stream/channel DMA); it has SrcDataWidth/DestDataWidth
+ * instead, so stm32_capi_dma_data_alignment maps to one of two macro sets
+ * depending on which endpoint (src or dst) it is being applied to.
+ */
+static uint32_t stm32_capi_dma_h5_src_width(enum stm32_capi_dma_data_alignment align)
+{
+	switch (align) {
+	case CAPI_DMA_DATA_ALIGN_HALF_WORD:
+		return DMA_SRC_DATAWIDTH_HALFWORD;
+	case CAPI_DMA_DATA_ALIGN_WORD:
+		return DMA_SRC_DATAWIDTH_WORD;
+	case CAPI_DMA_DATA_ALIGN_BYTE:
+	default:
+		return DMA_SRC_DATAWIDTH_BYTE;
+	}
+}
+
+static uint32_t stm32_capi_dma_h5_dest_width(enum stm32_capi_dma_data_alignment align)
+{
+	switch (align) {
+	case CAPI_DMA_DATA_ALIGN_HALF_WORD:
+		return DMA_DEST_DATAWIDTH_HALFWORD;
+	case CAPI_DMA_DATA_ALIGN_WORD:
+		return DMA_DEST_DATAWIDTH_WORD;
+	case CAPI_DMA_DATA_ALIGN_BYTE:
+	default:
+		return DMA_DEST_DATAWIDTH_BYTE;
+	}
+}
+#endif /* STM32H5 */
+
 /**
  * @brief Configure a DMA transfer.
  * @param chan - Pointer to the DMA channel.
@@ -307,7 +341,14 @@ static int stm32_capi_dma_config_xfer(struct capi_dma_chan *chan,
 		chan_priv->hdma.Init.Mode = DMA_NORMAL;
 		break;
 	case CAPI_DMA_CIRCULAR_MODE:
+#if defined(STM32H5)
+		/* GPDMA circular transfers need the linked-list API
+		 * (DMA_InitLinkedListTypeDef); the plain Init path used here
+		 * has no equivalent. */
+		return -ENOTSUP;
+#else
 		chan_priv->hdma.Init.Mode = DMA_CIRCULAR;
+#endif
 		break;
 	default:
 		chan_priv->hdma.Init.Mode = DMA_NORMAL;
@@ -317,29 +358,75 @@ static int stm32_capi_dma_config_xfer(struct capi_dma_chan *chan,
 	switch (xfer->xfer_type) {
 	case CAPI_DMA_MEM_TO_MEM:
 		chan_priv->hdma.Init.Direction = DMA_MEMORY_TO_MEMORY;
+#ifndef STM32H5
 		chan_priv->hdma.Init.MemInc = (xfer->dst_inc == CAPI_DMA_BYTE_INCREMENT) ?
 					      DMA_MINC_ENABLE : DMA_MINC_DISABLE;
 		chan_priv->hdma.Init.PeriphInc = (xfer->src_inc == CAPI_DMA_BYTE_INCREMENT) ?
 						 DMA_PINC_ENABLE : DMA_PINC_DISABLE;
+#endif
 		break;
 	case CAPI_DMA_MEM_TO_DEV:
 		chan_priv->hdma.Init.Direction = DMA_MEMORY_TO_PERIPH;
+#ifndef STM32H5
 		chan_priv->hdma.Init.MemInc = (xfer->src_inc == CAPI_DMA_BYTE_INCREMENT) ?
 					      DMA_MINC_ENABLE : DMA_MINC_DISABLE;
 		chan_priv->hdma.Init.PeriphInc = (xfer->dst_inc == CAPI_DMA_BYTE_INCREMENT) ?
 						 DMA_PINC_ENABLE : DMA_PINC_DISABLE;
+#endif
 		break;
 	case CAPI_DMA_DEV_TO_MEM:
 		chan_priv->hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
+#ifndef STM32H5
 		chan_priv->hdma.Init.MemInc = (xfer->dst_inc == CAPI_DMA_BYTE_INCREMENT) ?
 					      DMA_MINC_ENABLE : DMA_MINC_DISABLE;
 		chan_priv->hdma.Init.PeriphInc = (xfer->src_inc == CAPI_DMA_BYTE_INCREMENT) ?
 						 DMA_PINC_ENABLE : DMA_PINC_DISABLE;
+#endif
 		break;
 	default:
 		return -EINVAL;
 	}
 
+#if defined(STM32H5)
+	/* GPDMA addresses are direction-relative (Src/Dest map straight onto
+	 * xfer->src/xfer->dst) unlike classic DMA's role-relative Mem/Periph,
+	 * so the increment mapping needs no per-direction cases. */
+	chan_priv->hdma.Init.SrcInc = (xfer->src_inc == CAPI_DMA_BYTE_INCREMENT) ?
+				      DMA_SINC_INCREMENTED : DMA_SINC_FIXED;
+	chan_priv->hdma.Init.DestInc = (xfer->dst_inc == CAPI_DMA_BYTE_INCREMENT) ?
+				       DMA_DINC_INCREMENTED : DMA_DINC_FIXED;
+
+	/* mem_data_alignment/per_data_alignment are still role-relative
+	 * (Mem/Periph), so re-derive which endpoint (src/dst) is which role
+	 * per direction, mirroring the Direction cases above. */
+	switch (xfer->xfer_type) {
+	case CAPI_DMA_MEM_TO_DEV:
+		chan_priv->hdma.Init.SrcDataWidth =
+			stm32_capi_dma_h5_src_width(chan_priv->mem_data_alignment);
+		chan_priv->hdma.Init.DestDataWidth =
+			stm32_capi_dma_h5_dest_width(chan_priv->per_data_alignment);
+		break;
+	case CAPI_DMA_MEM_TO_MEM:
+	case CAPI_DMA_DEV_TO_MEM:
+	default:
+		chan_priv->hdma.Init.SrcDataWidth =
+			stm32_capi_dma_h5_src_width(chan_priv->per_data_alignment);
+		chan_priv->hdma.Init.DestDataWidth =
+			stm32_capi_dma_h5_dest_width(chan_priv->mem_data_alignment);
+		break;
+	}
+
+	/* Fields with no classic-DMA equivalent; conservative fixed defaults
+	 * (single-beat bursts, port 0, one completion event per block) are
+	 * always valid regardless of the actual transfer. */
+	chan_priv->hdma.Init.Priority = DMA_LOW_PRIORITY_LOW_WEIGHT;
+	chan_priv->hdma.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
+	chan_priv->hdma.Init.SrcBurstLength = 1U;
+	chan_priv->hdma.Init.DestBurstLength = 1U;
+	chan_priv->hdma.Init.TransferAllocatedPort = DMA_SRC_ALLOCATED_PORT0 |
+						      DMA_DEST_ALLOCATED_PORT0;
+	chan_priv->hdma.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
+#else
 	switch (chan_priv->mem_data_alignment) {
 	case CAPI_DMA_DATA_ALIGN_BYTE:
 		chan_priv->hdma.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
@@ -369,6 +456,7 @@ static int stm32_capi_dma_config_xfer(struct capi_dma_chan *chan,
 		chan_priv->hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
 		break;
 	}
+#endif /* STM32H5 */
 
 	chan_priv->src = xfer->src;
 	chan_priv->dst = xfer->dst;
