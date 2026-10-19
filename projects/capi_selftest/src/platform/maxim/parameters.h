@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file parameters.h
- * @brief Definitions specific to MAX32657 platform used by capi_selftest project.
+ * @brief Definitions specific to Maxim platforms used by capi_selftest project.
  * Copyright (c) 2026 Analog Devices, Inc.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -17,6 +17,8 @@
 #include "maxim_capi_dma.h"
 #include "maxim_capi_i2c.h"
 #include "capi_uart.h"
+
+#if (TARGET_NUM == 32657)
 
 #define UART_IDENTIFIER		0U
 #define UART_OPS		&max_capi_uart_ops
@@ -105,6 +107,10 @@
 
 /**
  * I2C on MAX32657EVKIT
+ *
+ * Initiator only: the part has a single I2C-capable block, so no second
+ * controller can be wired as a target and the I2C group collapses to one
+ * skipping BASIC.
  */
 #define I2C_IDENTIFIER		0U
 #define I2C_OPS			&max_capi_i2c_ops
@@ -127,5 +133,163 @@
 
 /** IRQ */
 #define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
+
+#elif (TARGET_NUM == 32690)
+
+#define UART_IDENTIFIER		3U
+#define UART_OPS		&max_capi_uart_ops
+#define UART_BAUDRATE		115200
+#define UART_EXTRA_TYPE		struct max_capi_uart_extra
+#define UART_EXTRA_INIT		{ .use_irq = true }
+#define PLATFORM_NAME		"MAX32690"
+
+/*
+ * UART loopback runner for test_uart.c (must NOT be the console UART).
+ * MAX32690EVKIT: use UART2 on P1.9/P1.10 and strap TX<->RX externally.
+ */
+#define UART_ASYNC_IDENTIFIER	2U
+#define UART_ASYNC_OPS		&max_capi_uart_ops
+#define UART_ASYNC_EXTRA_TYPE	struct max_capi_uart_extra
+#define UART_ASYNC_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIOH, .use_irq = true }
+
+#define UART_ASYNC_HAS_IRQ		1
+#define UART_ASYNC_HAS_LINE_CONFIG	1
+#define UART_ASYNC_HAS_IRQ_CTL		1
+#define UART_ASYNC_HAS_RX_TIMEOUT	0
+
+#define GPIO_OUTPUT_IDENTIFIER	0U
+#define GPIO_OUTPUT_NUM_PINS	1U
+#define GPIO_OUTPUT_OPS		&max_capi_gpio_ops
+#define GPIO_OUTPUT_NAME	"P0.9"
+#define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
+#define GPIO_OUTPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_OUT, .pin_offset = 9U }
+
+#define GPIO_INPUT_IDENTIFIER	2U
+#define GPIO_INPUT_NUM_PINS	1U
+#define GPIO_INPUT_OPS		&max_capi_gpio_ops
+#define GPIO_INPUT_NAME		"P2.12"
+#define GPIO_INPUT_EXTRA	struct max_capi_gpio_extra_config
+#define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN, .pin_offset = 12U }
+
+/*
+ * Output and input share one port here, so a port-wide write would drive the
+ * input pin as well; only the pin-level loopback is meaningful.
+ */
+#define GPIO_HAS_PORT_LOOPBACK	1
+#define GPIO_HAS_PIN_LOOPBACK	1
+
+#define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
+#define GPIO_INPUT_PIN_NUMBERS	{ 0 }
+#define GPIO_INPUT_IRQ_PIN	12U
+
+/*
+ * SPI async delivery mode. SPI_HAS_IRQ and SPI_HAS_DMA are mutually exclusive:
+ * the loopback test configures exactly one delivery path per build.
+ */
+#define SPI_HAS_IRQ	0
+#define SPI_HAS_DMA	1
+
+/* IRQ controller - NVIC, no base address needed. */
+#define IRQ_CTRL_IDENTIFIER	0U
+
+/**
+ * SPI0 on MAX32690EVKIT:
+ * 	P2.29 = SCK, P2.27 = MISO, P2.28 = MOSI, P0.22 = SS0
+ * 	External loopback requires P2.27 physically wired to P2.28.
+ */
+#define SPI_IDENTIFIER		0U
+#define SPI_OPS			&max_capi_spi_ops
+#define SPI_EXTRA_TYPE		struct max_capi_spi_extra
+#define SPI_EXTRA_INIT		{ .device_role = MAX_CAPI_SPI_DEVICE_ROLE_CONTROLLER, \
+				  .bus_width = MAX_CAPI_SPI_BUS_WIDTH_STANDARD, \
+				  .num_targets = 1, \
+				  .polarity_mask = 0b111, \
+				  .chip_select = MAX_CAPI_SPI_CS0, \
+				  .clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0, \
+				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, \
+				  .use_irq = true }
+#define SPI_CLK_FREQ		60000000
+
+#define SPI_DEVICE_NATIVE_CS	MAX_CAPI_SPI_CS0
+#define SPI_DEVICE_MODE		CAPI_SPI_MODE_0
+#define SPI_DEVICE_SPEED_HZ	100000
+
+/**
+ * TMR0 on MAX32690EVKIT: 32-bit general purpose timer.
+ *
+ * output_freq_hz = 1 MHz gives 1 us resolution. TIMER_COUNTER_MAX must be one
+ * less than a power of two so the BASIC rate delta stays correct across a
+ * wrap, and the wrap period must sit between the rate window (10 ms) and the
+ * ASYNC_IRQ overflow timeout so an overflow actually fires: 0x3FFFF at 1 MHz
+ * is ~262 ms.
+ */
+#define TIMER_IDENTIFIER		0U
+#define TIMER_OPS			&max_capi_timer_ops
+#define TIMER_INPUT_CLK_HZ		0
+#define TIMER_OUTPUT_FREQ_HZ		1000000U
+#define TIMER_EXTRA_TYPE		struct max_capi_timer_extra
+#define TIMER_EXTRA_INIT		{ .use_irq = true }
+
+#define TIMER_DIRECTION			CAPI_TIMER_COUNT_UP
+#define TIMER_COUNTER_MAX		0x3FFFFU
+#define TIMER_COMPARE_VALUE		0x8000U
+#define TIMER_RATE_WINDOW_US		10000U
+#define TIMER_RATE_COUNTER_MASK		0x3FFFFU
+#define TIMER_RATE_TOLERANCE_PCT	5U
+#define TIMER_HAS_IRQ			1
+#define TIMER_HAS_COMPARE		1
+
+/**
+ * I2C initiator/target loopback on MAX32690EVKIT:
+ * 	Initiator = I2C0 (P2.7, P2.8)
+ * 	Target    = I2C2 (P1.7, P1.8)
+ *
+ * Both sides are pinned explicitly to VDDIO (1.8 V) rather than relying on
+ * max_capi_i2c_extra's VDDIO default, so the level is unambiguous here if the
+ * bus needs to move to VDDIOH later.
+ */
+#define I2C_IDENTIFIER		0U
+#define I2C_OPS			&max_capi_i2c_ops
+#define I2C_EXTRA_TYPE		struct max_capi_i2c_extra
+#define I2C_EXTRA_INIT		{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIO, .use_irq = true }
+#define I2C_TARGET_ADDR		0x42
+#define I2C_HAS_IRQ		1
+
+#define I2C_TARGET_IDENTIFIER	2U
+#define I2C_TARGET_OPS		&max_capi_i2c_ops
+#define I2C_TARGET_EXTRA_TYPE	struct max_capi_i2c_extra
+#define I2C_TARGET_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIO, .use_irq = true }
+
+#define I2C_TARGET_HAS_IRQ	1
+
+/*
+ * The CAPI I2C backend enables each instance's peripheral clock and muxes its
+ * own pins during init (see maxim_capi_i2c.c), and routes target-mode events
+ * through the shared I2Cn_IRQHandler, so no extra board bring-up is needed
+ * here. The STM32 port needs these hooks because CubeMX only generates the
+ * MSP for one of its two I2C instances.
+ */
+#define I2C_PLATFORM_INIT()		0
+#define I2C_PLATFORM_DEINIT()		((void)0)
+#define I2C_PLATFORM_SET_TARGET(h)	((void)(h))
+
+/**
+ * DMA on MAX32690EVKIT: single controller, 16 channels, memory-to-memory.
+ */
+#define DMA_OPS			&max_capi_dma_ops
+#define DMA_IDENTIFIER		0U
+#define DMA_NUM_CHANS		16U
+#define DMA_XFER_EXTRA_TYPE	struct max_capi_dma_xfer_extra
+#define DMA_XFER_EXTRA_INIT	{ .reqsel = MAX_CAPI_DMA_REQUEST_MEMTOMEM }
+#define DMA_PLATFORM_INIT()
+#define DMA_XFER_SIZE		64U
+#define DMA_CONFIG_EXTRA	&(struct max_capi_dma_extra){ .use_irq = true }
+
+/** IRQ */
+#define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
+
+#else
+#error "Unsupported Maxim target for capi_selftest (expected 32657 or 32690)."
+#endif /* TARGET_NUM */
 
 #endif /* __PARAMETERS_H__ */

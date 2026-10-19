@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file main.c
- * @brief Main file for Maxim MAX32657 platform of capi_selftest project.
+ * @brief Main file for the Maxim platforms of the capi_selftest project.
  * Copyright (c) 2026 Analog Devices, Inc.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -15,6 +15,20 @@
 
 extern int example_main(void);
 
+/*
+ * Resolve the loopback input pin's port and NVIC line from
+ * GPIO_INPUT_IDENTIFIER rather than hardcoding port 0, so parts with more
+ * than one GPIO port work without editing these hooks.
+ */
+#define GPIO_IRQ_PORT		MXC_GPIO_GET_GPIO(GPIO_INPUT_IDENTIFIER)
+#define GPIO_IRQ_LINE		MXC_GPIO_GET_IRQ(GPIO_INPUT_IDENTIFIER)
+
+#ifndef GPIO_INPUT_IRQ_PIN
+#define GPIO_INPUT_IRQ_PIN	gpio_input_pin_numbers[0]
+#endif
+
+#define GPIO_IRQ_PIN_MASK	(1U << GPIO_INPUT_IRQ_PIN)
+
 /**
  * @brief Platform hook: Arm (enable) GPIO IRQ for loopback test.
  * @param irq_line Pointer to store the CAPI IRQ line number.
@@ -28,8 +42,8 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 	 * loopback pair does not require editing this hook.
 	 */
 	mxc_gpio_cfg_t gpio_irq = {
-		.port = MXC_GPIO0,
-		.mask = (1U << gpio_input_pin_numbers[0]),
+		.port = GPIO_IRQ_PORT,
+		.mask = GPIO_IRQ_PIN_MASK,
 		.func = MXC_GPIO_FUNC_IN,
 		.pad = MXC_GPIO_PAD_NONE,
 		.vssel = MXC_GPIO_VSSEL_VDDIO,
@@ -41,15 +55,15 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 
 	/*
 	 * Configure interrupt on rising edge.
-	 * The test has already registered its callback via capi_irq_register(GPIO0_IRQn, ...),
+	 * The test has already registered its callback via capi_irq_register(GPIOn_IRQn, ...),
 	 * so we just need to configure the hardware to trigger that IRQ line.
 	 */
 	MXC_GPIO_IntConfig(&gpio_irq, MXC_GPIO_INT_RISING);
 	MXC_GPIO_ClearFlags(gpio_irq.port, gpio_irq.mask);
 	MXC_GPIO_EnableInt(gpio_irq.port, gpio_irq.mask);
 
-	/* Return GPIO0 IRQ line number for the test to register with CAPI IRQ */
-	*irq_line = GPIO0_IRQn;
+	/* Return the port's IRQ line number for the test to register with CAPI IRQ */
+	*irq_line = GPIO_IRQ_LINE;
 	return 0;
 }
 
@@ -59,7 +73,7 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 void platform_gpio_irq_disarm(void)
 {
 	/* Disable interrupt on the loopback input pin (from parameters.h). */
-	MXC_GPIO_DisableInt(MXC_GPIO0, (1U << gpio_input_pin_numbers[0]));
+	MXC_GPIO_DisableInt(GPIO_IRQ_PORT, GPIO_IRQ_PIN_MASK);
 }
 
 /**
@@ -72,7 +86,7 @@ void platform_gpio_irq_disarm(void)
 bool platform_gpio_irq_ack(void)
 {
 	/*
-	 * Clear the input pin's interrupt flag explicitly. GPIO0_IRQHandler
+	 * Clear the input pin's interrupt flag explicitly. GPIOn_IRQHandler
 	 * clears all latched flags after calling this from ISR context, but this
 	 * function is also called from test-body context (to swallow stale
 	 * latched edges before re-enabling the NVIC line). In that context no ISR
@@ -80,10 +94,10 @@ bool platform_gpio_irq_ack(void)
 	 * fire immediately on NVIC_EnableIRQ, looping the CPU in the ISR.
 	 * Clearing an already-cleared flag is harmless.
 	 */
-	uint32_t mask = 1U << gpio_input_pin_numbers[0];
+	uint32_t mask = GPIO_IRQ_PIN_MASK;
 
-	if (MXC_GPIO_GetFlags(MXC_GPIO0) & mask) {
-		MXC_GPIO_ClearFlags(MXC_GPIO0, mask);
+	if (MXC_GPIO_GetFlags(GPIO_IRQ_PORT) & mask) {
+		MXC_GPIO_ClearFlags(GPIO_IRQ_PORT, mask);
 		return true;
 	}
 
@@ -91,7 +105,7 @@ bool platform_gpio_irq_ack(void)
 }
 
 /**
- * @brief Main function execution for MAX32657 platform.
+ * @brief Main function execution for the Maxim platforms.
  * @return Result of the enabled example execution.
  */
 int main(void)
