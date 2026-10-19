@@ -144,8 +144,10 @@ static int max_capi_gpio_port_init(struct capi_gpio_port_handle **handle,
 	}
 
 	if ((uint32_t)priv->extra.pin_offset + config->num_pins >
-	    _max_capi_gpio_port_pins(config->identifier))
-		return -EINVAL;
+	    _max_capi_gpio_port_pins(config->identifier)) {
+		ret = -EINVAL;
+		goto free_handle;
+	}
 
 	priv->phys_pin_mask = (uint32_t)(priv->pin_mask << priv->extra.pin_offset);
 
