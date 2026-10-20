@@ -14,6 +14,14 @@ config CAPI_SELFTEST_LOOPBACK_EXAMPLE
 	help
 	  CAPI loopback test example (SPI, I2C, GPIO, IRQ, DMA, timer tests).
 
+config CAPI_SELFTEST_USB_UART_EXAMPLE
+	bool "USB UART example"
+	depends on CAPI_USB_UART && CAPI_TIME
+	help
+	  Runs the self-test report over the USB CDC-ACM virtual serial port
+	  and exercises the CAPI USB UART backend (transmit, line coding,
+	  async transmit/receive with an interactive echo).
+
 endchoice
 
 endmenu

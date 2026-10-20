@@ -16,7 +16,7 @@ integration tests, not unit tests: a GPIO edge really fires an interrupt, a SPI
 transfer really loops MOSI back to MISO, an I2C initiator really addresses a
 second controller wired up as a target, and so on.
 
-The project ships two examples, selected by ``PROJECT_DEFCONFIG``:
+The project ships three examples, selected by ``PROJECT_DEFCONFIG``:
 
 * ``basic.conf`` - the **basic** example (``src/examples/basic``). UART only:
   it brings up the console UART and runs the test framework over it. Use it to
@@ -29,7 +29,13 @@ The project ships two examples, selected by ``PROJECT_DEFCONFIG``:
   timer, I2C, UART and DMA, each a table of subtests run back-to-back with a
   summary at the end.
 
-Both examples share ``src/common`` (the test framework and ``common_data``) and
+* ``usb_uart.conf`` - the **usb_uart** example (``src/examples/usb_uart``).
+  Runs the test framework over a USB CDC-ACM virtual serial port instead of
+  the console UART, exercising the CAPI USB UART backend
+  (``CONFIG_CAPI_USB_UART``). Only on platforms that provide one - currently
+  the MAX32690.
+
+All examples share ``src/common`` (the test framework and ``common_data``) and
 a per-platform ``src/platform/<plat>/`` directory that supplies ``main.c`` and
 ``parameters.h``. ``parameters.h`` is the only file that knows the board: it
 maps each peripheral to a CAPI backend and publishes the capability macros the
@@ -344,6 +350,26 @@ has three I2C blocks, so the I2C group runs a real two-controller loopback.
 Console is UART2 on the USB-UART (P1.9/P1.10) - note this differs from the
 MAX32657EVKIT, where the console is UART0. The second (async) UART is not
 mapped, so the UART group skips.
+
+USB UART example
+~~~~~~~~~~~~~~~~
+
+The ``usb_uart`` example needs no strap: connect the EVKIT's high-speed USB
+device connector to the host, in addition to the debug/console USB.
+
+.. code-block:: bash
+
+	cmake -B build-usb --preset max32690evkit \
+	    -DPROJECT_DEFCONFIG=capi_selftest/usb_uart.conf
+	cmake --build build-usb --target capi_selftest -j$(nproc)
+	cmake --build build-usb --target flash
+
+The board enumerates as a CDC-ACM device (VID ``0x0B6A``, PID ``0x003C``,
+``/dev/ttyACM*`` on Linux). The example waits up to 60 s for a terminal to
+open the port, then prints the report on it. ``RECEIVE_ASYNC`` prompts for
+four characters and echoes them back; it reports a ``BOARD_STATE`` skip if
+nothing is typed within 30 s. The baud rate shown by ``GET_LINE_CONFIG`` is
+whatever the terminal requested - it has no effect on a USB link.
 
 How a test is skipped
 ---------------------

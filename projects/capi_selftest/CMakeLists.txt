@@ -37,6 +37,12 @@ if(CONFIG_CAPI_SELFTEST_LOOPBACK_EXAMPLE)
     )
 endif()
 
+if(CONFIG_CAPI_SELFTEST_USB_UART_EXAMPLE)
+    target_sources(capi_selftest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/usb_uart/usb_uart_example.c
+    )
+endif()
+
 target_include_directories(capi_selftest PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${PLATFORM}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/platform

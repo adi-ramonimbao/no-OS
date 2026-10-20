@@ -22,7 +22,8 @@
 /** Static declarations *******************************************************/
 
 static struct capi_uart_handle *uart[MXC_UART_INSTANCES] = {NULL};
-static int8_t stdio_index = -1;
+/* Any CAPI UART backend (hardware UART, USB CDC-ACM) can own stdio. */
+static struct capi_uart_handle *stdio_handle = NULL;
 
 /** Forward declarations ******************************************************/
 
@@ -672,8 +673,7 @@ static int max_capi_uart_deinit(struct capi_uart_handle *handle)
 		capi_free(handle);
 	}
 
-	if (stdio_index == id)
-		stdio_index = -1;
+	_max_capi_uart_stdio_release(handle);
 
 	uart[id] = NULL;
 
@@ -1479,14 +1479,33 @@ int max_capi_uart_stdio_enable(struct capi_uart_handle *handle)
 		return -EINVAL;
 
 	uart_priv = handle->priv;
-	stdio_index = uart_priv->id;
 
 	if (handle != uart[uart_priv->id])
 		return -EINVAL;
 
-	setvbuf(stdout, NULL, _IONBF, 0);
+	_max_capi_uart_stdio_set(handle);
 
 	return 0;
+}
+
+/**
+ * @brief Route stdio through a CAPI UART handle of any backend
+ * @param handle The UART handle
+ */
+void _max_capi_uart_stdio_set(struct capi_uart_handle *handle)
+{
+	stdio_handle = handle;
+	setvbuf(stdout, NULL, _IONBF, 0);
+}
+
+/**
+ * @brief Stop routing stdio through a handle, if it currently owns stdio
+ * @param handle The UART handle being torn down
+ */
+void _max_capi_uart_stdio_release(struct capi_uart_handle *handle)
+{
+	if (stdio_handle == handle)
+		stdio_handle = NULL;
 }
 
 /** stdio Redirect implementation *********************************************/
@@ -1520,11 +1539,11 @@ int _write(int file, char *ptr, int len)
 {
 	int ret;
 
-	if (stdio_index == -1)
+	if (!stdio_handle)
 		return -1;
 
 	if (file == STDOUT_FILENO || file == STDERR_FILENO) {
-		ret = max_capi_uart_transmit(uart[stdio_index], (uint8_t *)ptr, len);
+		ret = capi_uart_transmit(stdio_handle, (uint8_t *)ptr, len);
 		if (ret < 0) {
 
 			errno = -ret;
@@ -1580,11 +1599,11 @@ int _read(int file, char *ptr, int len)
 {
 	int ret;
 
-	if (stdio_index == -1)
+	if (!stdio_handle)
 		return -1;
 
 	if (file == STDIN_FILENO) {
-		ret = max_capi_uart_receive(uart[stdio_index], (uint8_t *)ptr, 1);
+		ret = capi_uart_receive(stdio_handle, (uint8_t *)ptr, 1);
 		if (ret < 0) {
 			errno = -ret;
 			return -1;

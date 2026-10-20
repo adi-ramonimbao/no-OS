@@ -85,6 +85,10 @@ struct max_capi_uart_priv {
 		.priv = &(struct max_capi_uart_priv){0}	\
 	})
 
+/* Shared stdio retarget, usable by every MAX32690 CAPI UART backend */
+void _max_capi_uart_stdio_set(struct capi_uart_handle *handle);
+void _max_capi_uart_stdio_release(struct capi_uart_handle *handle);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */

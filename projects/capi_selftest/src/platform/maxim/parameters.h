@@ -17,6 +17,9 @@
 #include "maxim_capi_dma.h"
 #include "maxim_capi_i2c.h"
 #include "capi_uart.h"
+#ifdef CONFIG_CAPI_USB_UART
+#include "maxim_capi_usb_uart.h"
+#endif
 
 #if (TARGET_NUM == 32657)
 
@@ -156,6 +159,15 @@
 #define UART_ASYNC_HAS_LINE_CONFIG	1
 #define UART_ASYNC_HAS_IRQ_CTL		1
 #define UART_ASYNC_HAS_RX_TIMEOUT	0
+
+#ifdef CONFIG_CAPI_USB_UART
+/* USB CDC-ACM UART on the MAX32690EVKIT high-speed USB connector */
+#define USB_UART_IDENTIFIER	0U	/* ignored: single USB controller */
+#define USB_UART_OPS		&max_capi_usb_uart_ops
+#define USB_UART_EXTRA_TYPE	struct max_capi_usb_uart_extra
+#define USB_UART_EXTRA_INIT	{ .vid = MAX_CAPI_USB_UART_DEFAULT_VID, \
+				  .pid = MAX_CAPI_USB_UART_DEFAULT_PID }
+#endif /* CONFIG_CAPI_USB_UART */
 
 #define GPIO_OUTPUT_IDENTIFIER	0U
 #define GPIO_OUTPUT_NUM_PINS	1U

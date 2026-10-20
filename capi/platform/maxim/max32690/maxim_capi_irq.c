@@ -673,6 +673,14 @@ void WDT1_IRQHandler(void)
 	_wdt_handler((uint32_t)WDT1_IRQn, MXC_WDT1);
 }
 
+void USB_IRQHandler(void)
+{
+	uint32_t irq = (uint32_t)USB_IRQn;
+
+	if (irq_table[irq].callback)
+		irq_table[irq].callback(irq_table[irq].arg);
+}
+
 /** CAPI functions implementation **********************************************/
 
 int capi_irq_init(struct capi_irq_config *config)

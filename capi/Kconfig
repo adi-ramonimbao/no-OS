@@ -15,6 +15,16 @@ config CAPI_UART
 	bool "CAPI UART"
 	default n
 
+config CAPI_USB_UART
+	bool "CAPI USB UART (CDC-ACM)"
+	depends on CAPI_UART && CAPI_IRQ
+	default n
+	help
+	  Enable the USB CDC-ACM backend of CAPI UART on platforms that
+	  provide one (currently Maxim MAX32690). The device enumerates as a
+	  virtual serial port and is driven through the regular capi_uart_*
+	  API by selecting the platform's USB UART ops at init.
+
 config CAPI_ALLOC
 	bool "CAPI alloc"
 	default n

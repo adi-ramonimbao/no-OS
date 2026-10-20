@@ -104,6 +104,24 @@ const struct capi_uart_config uart_config = {
 	.ops = UART_OPS,
 };
 
+#ifdef USB_UART_OPS
+static USB_UART_EXTRA_TYPE usb_uart_extra = USB_UART_EXTRA_INIT;
+
+/**
+ * @brief CAPI UART configuration of the USB CDC-ACM virtual serial port.
+ *
+ * The USB host owns the line coding, so no line_config is supplied.
+ */
+const struct capi_uart_config usb_uart_config = {
+	.identifier = USB_UART_IDENTIFIER,
+	.dma_handle = NULL,
+	.clk_freq_hz = 0U,
+	.line_config = NULL,
+	.extra = &usb_uart_extra,
+	.ops = USB_UART_OPS,
+};
+#endif /* USB_UART_OPS */
+
 /**
  * @brief Short platform label printed by TEST_RUN_START().
  */

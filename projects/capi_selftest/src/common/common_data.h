@@ -20,6 +20,13 @@ struct test_framework_config;
  * @brief Console UART configuration used by the test framework output path.
  */
 extern const struct capi_uart_config uart_config;
+
+#ifdef USB_UART_OPS
+/**
+ * @brief USB CDC-ACM UART configuration used by the usb_uart example.
+ */
+extern const struct capi_uart_config usb_uart_config;
+#endif /* USB_UART_OPS */
 /**
  * @brief Short platform label printed in the test run header.
  */
