@@ -300,8 +300,150 @@
 /** IRQ */
 #define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
 
+#elif (TARGET_NUM == 32655)
+
+/* Console: UART0 (P0.0/P0.1) is the one routed to the FTHR DAPLink USB-UART. */
+#define UART_IDENTIFIER		0U
+#define UART_OPS		&max_capi_uart_ops
+#define UART_BAUDRATE		115200
+#define UART_EXTRA_TYPE		struct max_capi_uart_extra
+#define UART_EXTRA_INIT		{ .use_irq = true }
+#define PLATFORM_NAME		"MAX32655"
+
+/*
+ * UART loopback runner for test_uart.c (must NOT be the console UART).
+ * MAX32655FTHR: UART3 (LPUART) is the Feather RX (P2.6) / TX (P2.7) pair;
+ * strap them together. It runs from IBRO, the driver's default for UART3.
+ */
+#define UART_ASYNC_IDENTIFIER	3U
+#define UART_ASYNC_OPS		&max_capi_uart_ops
+#define UART_ASYNC_EXTRA_TYPE	struct max_capi_uart_extra
+#define UART_ASYNC_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIO, .use_irq = true }
+
+#define UART_ASYNC_HAS_IRQ		1
+#define UART_ASYNC_HAS_LINE_CONFIG	1
+#define UART_ASYNC_HAS_IRQ_CTL		1
+#define UART_ASYNC_HAS_RX_TIMEOUT	0
+
+/*
+ * GPIO loopback pair on MAX32655FTHR: P1.6 (Feather D13, output) wired to
+ * P1.7 (Feather D12, input). Both pins share port 1, but each handle covers a
+ * single pin via pin_offset and writes are masked, so port-wide writes only
+ * touch P1.6.
+ */
+#define GPIO_OUTPUT_IDENTIFIER	1U
+#define GPIO_OUTPUT_NUM_PINS	1U
+#define GPIO_OUTPUT_OPS		&max_capi_gpio_ops
+#define GPIO_OUTPUT_NAME	"P1.6"
+#define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
+#define GPIO_OUTPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_OUT, .pin_offset = 6U }
+
+#define GPIO_INPUT_IDENTIFIER	1U
+#define GPIO_INPUT_NUM_PINS	1U
+#define GPIO_INPUT_OPS		&max_capi_gpio_ops
+#define GPIO_INPUT_NAME		"P1.7"
+#define GPIO_INPUT_EXTRA	struct max_capi_gpio_extra_config
+#define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN, .pin_offset = 7U }
+
+#define GPIO_HAS_PORT_LOOPBACK	1
+#define GPIO_HAS_PIN_LOOPBACK	1
+
+#define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
+#define GPIO_INPUT_PIN_NUMBERS	{ 0 }
+#define GPIO_INPUT_IRQ_PIN	7U
+
+/*
+ * SPI async delivery mode. SPI_HAS_IRQ and SPI_HAS_DMA are mutually exclusive:
+ * the loopback test configures exactly one delivery path per build.
+ */
+#define SPI_HAS_IRQ	1
+#define SPI_HAS_DMA	0
+
+/* IRQ controller - NVIC, no base address needed. */
+#define IRQ_CTRL_IDENTIFIER	0U
+
+/**
+ * SPI1 on MAX32655FTHR (the Feather SPI header):
+ * 	P0.23 = SCK, P0.22 = MISO, P0.21 = MOSI, P0.20 = SS0
+ * 	External loopback requires P0.21 (J9.12) physically wired to P0.22
+ * 	(J9.13).
+ */
+#define SPI_IDENTIFIER		1U
+#define SPI_OPS			&max_capi_spi_ops
+#define SPI_EXTRA_TYPE		struct max_capi_spi_extra
+#define SPI_EXTRA_INIT		{ .device_role = MAX_CAPI_SPI_DEVICE_ROLE_CONTROLLER, \
+				  .bus_width = MAX_CAPI_SPI_BUS_WIDTH_STANDARD, \
+				  .num_targets = 1, \
+				  .polarity_mask = 0b111, \
+				  .chip_select = MAX_CAPI_SPI_CS0, \
+				  .clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0, \
+				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, \
+				  .use_irq = true }
+#define SPI_CLK_FREQ		25000000
+
+#define SPI_DEVICE_NATIVE_CS	MAX_CAPI_SPI_CS0
+#define SPI_DEVICE_MODE		CAPI_SPI_MODE_0
+#define SPI_DEVICE_SPEED_HZ	100000
+
+/**
+ * TMR0 on MAX32655FTHR: 32-bit general purpose timer.
+ *
+ * Clocked straight from PCLK (50 MHz with the default 100 MHz core) at
+ * prescaler 1, so a tick spans two CPU cycles and BASIC's back-to-back counter
+ * reads see it move.
+ *
+ * TIMER_COUNTER_MAX must be one less than a power of two so the BASIC rate
+ * delta stays correct across a wrap, and the wrap period must sit between the
+ * rate window (10 ms) and the ASYNC_IRQ overflow timeout (1 s) so an overflow
+ * actually fires: 0x1FFFFFF at 50 MHz is ~671 ms.
+ */
+#define TIMER_IDENTIFIER		0U
+#define TIMER_OPS			&max_capi_timer_ops
+#define TIMER_INPUT_CLK_HZ		0
+#define TIMER_OUTPUT_FREQ_HZ		50000000U
+#define TIMER_EXTRA_TYPE		struct max_capi_timer_extra
+#define TIMER_EXTRA_INIT		{ .use_irq = true }
+
+#define TIMER_DIRECTION			CAPI_TIMER_COUNT_UP
+#define TIMER_COUNTER_MAX		0x1FFFFFFU
+#define TIMER_COMPARE_VALUE		0x8000U
+#define TIMER_RATE_WINDOW_US		10000U
+#define TIMER_RATE_COUNTER_MASK		0x1FFFFFFU
+#define TIMER_RATE_TOLERANCE_PCT	5U
+#define TIMER_HAS_IRQ			1
+#define TIMER_HAS_COMPARE		1
+
+/**
+ * I2C2 on MAX32655FTHR (the Feather SCL P0.30 / SDA P0.31 header pins).
+ *
+ * Initiator only: I2C1 is the on-board MAX20303 PMIC bus and I2C0 is not
+ * brought out, so no second controller can be wired as a target and the I2C
+ * group collapses to one skipping BASIC.
+ */
+#define I2C_IDENTIFIER		2U
+#define I2C_OPS			&max_capi_i2c_ops
+#define I2C_EXTRA_TYPE		struct max_capi_i2c_extra
+#define I2C_EXTRA_INIT		{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIOH, .use_irq = true }
+#define I2C_TARGET_ADDR		0x42
+#define I2C_HAS_IRQ		1
+
+/**
+ * DMA on MAX32655FTHR: single controller, 4 channels, memory-to-memory.
+ */
+#define DMA_OPS			&max_capi_dma_ops
+#define DMA_IDENTIFIER		0U
+#define DMA_NUM_CHANS		4U
+#define DMA_XFER_EXTRA_TYPE	struct max_capi_dma_xfer_extra
+#define DMA_XFER_EXTRA_INIT	{ .reqsel = MAX_CAPI_DMA_REQUEST_MEMTOMEM }
+#define DMA_PLATFORM_INIT()
+#define DMA_XFER_SIZE		64U
+#define DMA_CONFIG_EXTRA	&(struct max_capi_dma_extra){ .use_irq = true }
+
+/** IRQ */
+#define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
+
 #else
-#error "Unsupported Maxim target for capi_selftest (expected 32657 or 32690)."
+#error "Unsupported Maxim target for capi_selftest (expected 32655, 32657 or 32690)."
 #endif /* TARGET_NUM */
 
 #endif /* __PARAMETERS_H__ */

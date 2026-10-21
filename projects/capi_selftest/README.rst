@@ -371,6 +371,48 @@ four characters and echoes them back; it reports a ``BOARD_STATE`` skip if
 nothing is typed within 30 s. The baud rate shown by ``GET_LINE_CONFIG`` is
 whatever the terminal requested - it has no effect on a USB link.
 
+Wiring - MAX32655 (MAX32655FTHR)
+--------------------------------
+
+Same groups, on-chip peripherals, all strapped on the Feather headers. All
+async paths are delivered through the NVIC (IRQ/FIFO); DMA is memory-to-memory
+only. Build with the ``max32655fthr`` preset.
+
+.. list-table::
+	:header-rows: 1
+	:widths: 16 26 58
+
+	* - Group
+	  - Peripheral
+	  - Strap / notes
+	* - GPIO
+	  - P1.6 -> P1.7
+	  - Jumper P1.6 (Feather D13, output) to P1.7 (Feather D12, input). Both
+	    pins share port 1, but each CAPI handle covers a single pin, so port
+	    and pin loopback both run; P1.7 is also armed as the IRQ source.
+	* - SPI
+	  - SPI1
+	  - Jumper P0.21 (MOSI, J9.12) to P0.22 (MISO, J9.13); P0.23 is SCK and
+	    P0.20 is SS0, driven not strapped. IRQ/FIFO delivery, no DMA. The
+	    CAPI SPI identifier is the hardware block number (1 = SPI1), not the
+	    MSDK index, which is reversed on this part.
+	* - I2C
+	  - I2C2
+	  - Initiator only on the Feather SCL/SDA pins (P0.30/P0.31). I2C1 is the
+	    on-board PMIC bus and I2C0 is not brought out, so the whole I2C group
+	    collapses to one skipping ``BASIC``.
+	* - UART
+	  - UART3 (LPUART)
+	  - Jumper the Feather RX (P2.6) and TX (P2.7) pins together. UART3 runs
+	    from the 7.3728 MHz IBRO.
+	* - IRQ / Timer / DMA
+	  - NVIC / TMR0 / DMA
+	  - No strap. IRQ reuses the P1.7 GPIO edge; TMR0 is a 32-bit on-chip
+	    counter clocked from the 50 MHz PCLK; DMA is memory-to-memory over the
+	    part's four channels.
+
+Console is UART0 on the DAPLink USB-UART (P0.0/P0.1).
+
 How a test is skipped
 ---------------------
 

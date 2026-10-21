@@ -48,6 +48,11 @@ target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/GPIO/gpio_m
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/GPIO/gpio_reva.c)
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/GPIO/gpio_common.c)
 
+target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/WDT/wdt_common.c)
+target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/WDT/wdt_me17.c)
+target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/WDT/wdt_revb.c)
+target_include_directories(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/WDT)
+
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/ADC/adc_me17.c)
 target_sources(no-os PRIVATE ${MAXIM_LIBRARIES}/PeriphDrivers/Source/ADC/adc_reva.c)
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Source/ADC)
@@ -59,6 +64,7 @@ target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Include
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Include/SYS)
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Include/TMR)
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Include/GPIO)
+target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Include/WDT)
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Source/TRNG)
 target_include_directories(no-os PUBLIC ${MAXIM_LIBRARIES}/PeriphDrivers/Source/SEMA)
 
