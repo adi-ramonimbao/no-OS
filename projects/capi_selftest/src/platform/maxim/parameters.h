@@ -139,7 +139,8 @@
 
 #elif (TARGET_NUM == 32690)
 
-#define UART_IDENTIFIER		3U
+/* Console: UART2 (P1.9/P1.10) is the one routed to the EVKIT USB-UART bridge. */
+#define UART_IDENTIFIER		2U
 #define UART_OPS		&max_capi_uart_ops
 #define UART_BAUDRATE		115200
 #define UART_EXTRA_TYPE		struct max_capi_uart_extra
@@ -148,9 +149,10 @@
 
 /*
  * UART loopback runner for test_uart.c (must NOT be the console UART).
- * MAX32690EVKIT: use UART2 on P1.9/P1.10 and strap TX<->RX externally.
+ * MAX32690EVKIT: use UART0 on P2.11 (RX) / P2.12 (TX) and strap them together.
+ * P2.12 also drives LED1, so the LED flickers while the UART group runs.
  */
-#define UART_ASYNC_IDENTIFIER	2U
+#define UART_ASYNC_IDENTIFIER	0U
 #define UART_ASYNC_OPS		&max_capi_uart_ops
 #define UART_ASYNC_EXTRA_TYPE	struct max_capi_uart_extra
 #define UART_ASYNC_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIOH, .use_irq = true }
@@ -176,23 +178,27 @@
 #define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
 #define GPIO_OUTPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_OUT, .pin_offset = 9U }
 
-#define GPIO_INPUT_IDENTIFIER	2U
+/*
+ * GPIO loopback pair on MAX32690EVKIT: P0.9 (output) wired to P0.8 (input).
+ * P2.12 is taken by UART0 TX for the UART loopback.
+ */
+#define GPIO_INPUT_IDENTIFIER	0U
 #define GPIO_INPUT_NUM_PINS	1U
 #define GPIO_INPUT_OPS		&max_capi_gpio_ops
-#define GPIO_INPUT_NAME		"P2.12"
+#define GPIO_INPUT_NAME		"P0.8"
 #define GPIO_INPUT_EXTRA	struct max_capi_gpio_extra_config
-#define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN, .pin_offset = 12U }
+#define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN, .pin_offset = 8U }
 
 /*
- * Output and input share one port here, so a port-wide write would drive the
- * input pin as well; only the pin-level loopback is meaningful.
+ * Output and input share port 0, but each handle covers a single pin via
+ * pin_offset and writes are masked, so port-wide writes only touch P0.9.
  */
 #define GPIO_HAS_PORT_LOOPBACK	1
 #define GPIO_HAS_PIN_LOOPBACK	1
 
 #define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
 #define GPIO_INPUT_PIN_NUMBERS	{ 0 }
-#define GPIO_INPUT_IRQ_PIN	12U
+#define GPIO_INPUT_IRQ_PIN	8U
 
 /*
  * SPI async delivery mode. SPI_HAS_IRQ and SPI_HAS_DMA are mutually exclusive:
@@ -229,24 +235,28 @@
 /**
  * TMR0 on MAX32690EVKIT: 32-bit general purpose timer.
  *
- * output_freq_hz = 1 MHz gives 1 us resolution. TIMER_COUNTER_MAX must be one
- * less than a power of two so the BASIC rate delta stays correct across a
- * wrap, and the wrap period must sit between the rate window (10 ms) and the
- * ASYNC_IRQ overflow timeout so an overflow actually fires: 0x3FFFF at 1 MHz
- * is ~262 ms.
+ * Clocked straight from PCLK (60 MHz with the default 120 MHz core) at
+ * prescaler 1. At 1 MHz the prescaler rounds to /64 and one tick spans ~128
+ * CPU cycles, so BASIC's two back-to-back counter reads land in the same tick
+ * and COUNTER_MOVED fails; at 60 MHz a tick is two CPU cycles.
+ *
+ * TIMER_COUNTER_MAX must be one less than a power of two so the BASIC rate
+ * delta stays correct across a wrap, and the wrap period must sit between the
+ * rate window (10 ms) and the ASYNC_IRQ overflow timeout (1 s) so an overflow
+ * actually fires: 0x1FFFFFF at 60 MHz is ~559 ms.
  */
 #define TIMER_IDENTIFIER		0U
 #define TIMER_OPS			&max_capi_timer_ops
 #define TIMER_INPUT_CLK_HZ		0
-#define TIMER_OUTPUT_FREQ_HZ		1000000U
+#define TIMER_OUTPUT_FREQ_HZ		60000000U
 #define TIMER_EXTRA_TYPE		struct max_capi_timer_extra
 #define TIMER_EXTRA_INIT		{ .use_irq = true }
 
 #define TIMER_DIRECTION			CAPI_TIMER_COUNT_UP
-#define TIMER_COUNTER_MAX		0x3FFFFU
+#define TIMER_COUNTER_MAX		0x1FFFFFFU
 #define TIMER_COMPARE_VALUE		0x8000U
 #define TIMER_RATE_WINDOW_US		10000U
-#define TIMER_RATE_COUNTER_MASK		0x3FFFFU
+#define TIMER_RATE_COUNTER_MASK		0x1FFFFFFU
 #define TIMER_RATE_TOLERANCE_PCT	5U
 #define TIMER_HAS_IRQ			1
 #define TIMER_HAS_COMPARE		1

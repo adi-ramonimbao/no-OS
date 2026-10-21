@@ -327,12 +327,10 @@ has three I2C blocks, so the I2C group runs a real two-controller loopback.
 	  - Peripheral
 	  - Strap / notes
 	* - GPIO
-	  - P2.11 -> P2.12
-	  - Jumper P2.11 (output) to P2.12 (input), adjacent pins on the JH4
-	    (PORT 2) header. P2.3/P2.6 are unclaimed in pins_me18.c but are not
-	    brought out to any EVKIT header, so they cannot be strapped. Pin-
-	    loopback only (``GPIO_HAS_PORT_LOOPBACK`` 0, since both pins share
-	    one port); P2.12 is also armed as the IRQ source.
+	  - P0.9 -> P0.8
+	  - Jumper P0.9 (output) to P0.8 (input). Both pins share port 0, but
+	    each CAPI handle covers a single pin, so port and pin loopback both
+	    run; P0.8 is also armed as the IRQ source.
 	* - SPI
 	  - SPI0
 	  - Jumper P2.27 (MISO) to P2.28 (MOSI); P2.29 is SCK and P0.22 is SS0,
@@ -342,14 +340,17 @@ has three I2C blocks, so the I2C group runs a real two-controller loopback.
 	  - Jumper P2.7/P2.8 (I2C0) to P1.7/P1.8 (I2C2) - SCL to SCL, SDA to
 	    SDA. I2C0 is the initiator, I2C2 the target. This is the one Maxim
 	    board here that can run the paired I2C tests.
+	* - UART
+	  - UART0
+	  - Jumper P2.11 (RX) to P2.12 (TX). P2.12 also drives LED1, so the LED
+	    flickers while the UART group runs.
 	* - IRQ / Timer / DMA
 	  - NVIC / TMR0 / DMA
-	  - No strap. IRQ reuses the P2.6 GPIO edge; TMR0 is a 32-bit on-chip
-	    counter (1 us resolution); DMA is memory-to-memory.
+	  - No strap. IRQ reuses the P0.8 GPIO edge; TMR0 is a 32-bit on-chip
+	    counter clocked from the 60 MHz PCLK; DMA is memory-to-memory.
 
 Console is UART2 on the USB-UART (P1.9/P1.10) - note this differs from the
-MAX32657EVKIT, where the console is UART0. The second (async) UART is not
-mapped, so the UART group skips.
+MAX32657EVKIT, where the console is UART0.
 
 USB UART example
 ~~~~~~~~~~~~~~~~
