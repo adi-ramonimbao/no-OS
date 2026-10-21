@@ -46,104 +46,70 @@ static uint8_t zero_rx[1];
  * only, while SPI1 through SPI4 also provide SS2.
  *
  * @param identifier - the SPI instance number.
- * @param chip_select - the chip select index in use.
+ * @param chip_select - bitmask of the chip selects in use (MAX_CAPI_SPI_CS*).
  * @param vssel - the voltage level of the interface.
  * @return 0 in case of success, -EINVAL otherwise.
  */
 static int _max_capi_spi_pins_config(uint32_t identifier, uint8_t chip_select,
 				     enum max_capi_gpio_vssel vssel)
 {
-	mxc_gpio_cfg_t spi_pins;
-	mxc_gpio_cfg_t cs;
+	const mxc_gpio_cfg_t *ss[3] = { NULL, NULL, NULL };
+	mxc_gpio_cfg_t cfg;
 
 	switch (identifier) {
 	case 0:
-		spi_pins = gpio_cfg_spi0;
-		switch (chip_select) {
-		case 0:
-			cs = gpio_cfg_spi0_ss0;
-			break;
-		case 1:
-			cs = gpio_cfg_spi0_ss1;
-			break;
-		default:
-			return -EINVAL;
-		}
+		cfg = gpio_cfg_spi0;
+		ss[0] = &gpio_cfg_spi0_ss0;
+		ss[1] = &gpio_cfg_spi0_ss1;
 		break;
 	case 1:
-		spi_pins = gpio_cfg_spi1;
-		switch (chip_select) {
-		case 0:
-			cs = gpio_cfg_spi1_ss0;
-			break;
-		case 1:
-			cs = gpio_cfg_spi1_ss1;
-			break;
-		case 2:
-			cs = gpio_cfg_spi1_ss2;
-			break;
-		default:
-			return -EINVAL;
-		}
+		cfg = gpio_cfg_spi1;
+		ss[0] = &gpio_cfg_spi1_ss0;
+		ss[1] = &gpio_cfg_spi1_ss1;
+		ss[2] = &gpio_cfg_spi1_ss2;
 		break;
 	case 2:
-		spi_pins = gpio_cfg_spi2;
-		switch (chip_select) {
-		case 0:
-			cs = gpio_cfg_spi2_ss0;
-			break;
-		case 1:
-			cs = gpio_cfg_spi2_ss1;
-			break;
-		case 2:
-			cs = gpio_cfg_spi2_ss2;
-			break;
-		default:
-			return -EINVAL;
-		}
+		cfg = gpio_cfg_spi2;
+		ss[0] = &gpio_cfg_spi2_ss0;
+		ss[1] = &gpio_cfg_spi2_ss1;
+		ss[2] = &gpio_cfg_spi2_ss2;
 		break;
 #if (MXC_SPI_INSTANCES > 3)
 	case 3:
-		spi_pins = gpio_cfg_spi3;
-		switch (chip_select) {
-		case 0:
-			cs = gpio_cfg_spi3_ss0;
-			break;
-		case 1:
-			cs = gpio_cfg_spi3_ss1;
-			break;
-		case 2:
-			cs = gpio_cfg_spi3_ss2;
-			break;
-		default:
-			return -EINVAL;
-		}
+		cfg = gpio_cfg_spi3;
+		ss[0] = &gpio_cfg_spi3_ss0;
+		ss[1] = &gpio_cfg_spi3_ss1;
+		ss[2] = &gpio_cfg_spi3_ss2;
 		break;
 	case 4:
-		spi_pins = gpio_cfg_spi4;
-		switch (chip_select) {
-		case 0:
-			cs = gpio_cfg_spi4_ss0;
-			break;
-		case 1:
-			cs = gpio_cfg_spi4_ss1;
-			break;
-		case 2:
-			cs = gpio_cfg_spi4_ss2;
-			break;
-		default:
-			return -EINVAL;
-		}
+		cfg = gpio_cfg_spi4;
+		ss[0] = &gpio_cfg_spi4_ss0;
+		ss[1] = &gpio_cfg_spi4_ss1;
+		ss[2] = &gpio_cfg_spi4_ss2;
 		break;
 #endif /* MXC_SPI_INSTANCES > 3 */
 	default:
 		return -EINVAL;
 	}
 
-	spi_pins.vssel = (mxc_gpio_vssel_t)vssel;
-	cs.vssel = (mxc_gpio_vssel_t)vssel;
-	MXC_GPIO_Config(&spi_pins);
-	MXC_GPIO_Config(&cs);
+	/* chip_select is a MAX_CAPI_SPI_CS* bitmask: every set bit must exist. */
+	if (!chip_select || (chip_select & ~(MAX_CAPI_SPI_CS0 | MAX_CAPI_SPI_CS1 |
+					     MAX_CAPI_SPI_CS2)))
+		return -EINVAL;
+	for (int i = 0; i < 3; i++)
+		if ((chip_select & (1 << i)) && !ss[i])
+			return -EINVAL;
+
+	cfg.vssel = (mxc_gpio_vssel_t)vssel;
+	MXC_GPIO_Config(&cfg);
+
+	for (int i = 0; i < 3; i++) {
+		if (!(chip_select & (1 << i)))
+			continue;
+		cfg = *ss[i];
+		cfg.vssel = (mxc_gpio_vssel_t)vssel;
+		MXC_GPIO_Config(&cfg);
+	}
 
 	return 0;
 }
@@ -964,7 +930,8 @@ static int max_capi_spi_init(struct capi_spi_controller_handle **handle,
 	};
 
 	ret = MXC_SPI_Init(MXC_SPI_GET_SPI(spi_id),
-			   device_role,
+			   (device_role == MAX_CAPI_SPI_DEVICE_ROLE_CONTROLLER) ?
+				   MXC_SPI_TYPE_CONTROLLER : MXC_SPI_TYPE_TARGET,
 			   (bus_width == MAX_CAPI_SPI_BUS_WIDTH_QUAD) ? 1 : 0,
 			   num_targets,
 			   polarity_mask,
