@@ -100,6 +100,8 @@ struct max_capi_i2c_priv {
 	volatile bool async_transfer_in_progress;
 	/** Whether to enable IRQ connection during init */
 	bool use_irq;
+	/** Whether to use the alternate pins */
+	bool use_alternate_pins;
 };
 
 #define CAPI_I2C_HANDLE_MAXIM_INIT()				\

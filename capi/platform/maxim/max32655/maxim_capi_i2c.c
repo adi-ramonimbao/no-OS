@@ -90,6 +90,34 @@ static uint32_t _max_capi_i2c_speed_to_hz(enum capi_i2c_speed speed)
 }
 
 /**
+ * @brief Wait for the bus to go idle after an initiator STOP.
+ *
+ * Newer MSDK releases return from MXC_I2C_MasterTransaction() as soon as
+ * MSTCTRL.STOP self-clears, which happens when the STOP condition starts, not
+ * once it is on the bus (v2023_06 waited for INTFL0.STOP instead). Returning
+ * early lets the caller race the target's STOP handling, and makes the next
+ * blocking transfer fail the MSDK's up-front STATUS.BUSY check. Waiting for
+ * BUSY to clear restores the v2023_06 behaviour and is a no-op there.
+ *
+ * The bound is a poll count rather than a time so this does not depend on
+ * CAPI time: each poll takes at least one core cycle, so it allows >= 1 ms.
+ *
+ * @param regs - the I2C instance
+ * @return 0 once idle, -ETIMEDOUT if the bus never went idle
+ */
+static int _max_capi_i2c_wait_bus_idle(mxc_i2c_regs_t *regs)
+{
+	uint32_t polls = SystemCoreClock / 1000U;
+
+	while (regs->status & MXC_F_I2C_STATUS_BUSY) {
+		if (polls-- == 0U)
+			return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
+/**
  * @brief Resolve the controller handle backing a CAPI device
  * @param device - the CAPI device descriptor
  * @param priv - receives the controller's private structure
@@ -553,7 +581,13 @@ static int max_capi_i2c_transmit(struct capi_i2c_device *device,
 	if (transfer->sub_address_len)
 		capi_free(tx_buf);
 
-	return ret ? -EIO : 0;
+	if (ret)
+		return -EIO;
+
+	if (!transfer->no_stop)
+		return _max_capi_i2c_wait_bus_idle(i2c_priv->regs);
+
+	return 0;
 }
 
 /**
@@ -598,8 +632,13 @@ static int max_capi_i2c_receive(struct capi_i2c_device *device,
 	};
 
 	ret = MXC_I2C_MasterTransaction(&req);
+	if (ret)
+		return -EIO;
 
-	return ret ? -EIO : 0;
+	if (!transfer->no_stop)
+		return _max_capi_i2c_wait_bus_idle(i2c_priv->regs);
+
+	return 0;
 }
 
 /**

@@ -42,10 +42,14 @@ static struct capi_i2c_controller_handle *i2c[MXC_I2C_INSTANCES] = {NULL};
  *   wired bus is electrically fine. Only the wired set is muxed here.
  *
  * @param identifier - the I2C instance number.
+ * @param use_alternate_pin - mux the instance's alternate pin set
+ *			      (gpio_cfg_i2c0a, gpio_cfg_i2c1a, gpio_cfg_i2c2c)
+ *			      instead of its default one.
  * @param vssel - the voltage level of the interface.
  * @return 0 on success, -EINVAL otherwise.
  */
 static int _max_capi_i2c_pins_config(uint32_t identifier,
+				     bool use_alternate_pin,
 				     enum max_capi_gpio_vssel vssel)
 {
 	mxc_gpio_cfg_t i2c_pins;
@@ -53,15 +57,15 @@ static int _max_capi_i2c_pins_config(uint32_t identifier,
 	switch (identifier) {
 	case 0:
 		MXC_SYS_ClockEnable(MXC_SYS_PERIPH_CLOCK_I2C0);
-		i2c_pins = gpio_cfg_i2c0;
+		i2c_pins = use_alternate_pin ? gpio_cfg_i2c0a : gpio_cfg_i2c0;
 		break;
 	case 1:
 		MXC_SYS_ClockEnable(MXC_SYS_PERIPH_CLOCK_I2C1);
-		i2c_pins = gpio_cfg_i2c1;
+		i2c_pins = use_alternate_pin ? gpio_cfg_i2c1a : gpio_cfg_i2c1;
 		break;
 	case 2:
 		MXC_SYS_ClockEnable(MXC_SYS_PERIPH_CLOCK_I2C2);
-		i2c_pins = gpio_cfg_i2c2;
+		i2c_pins = use_alternate_pin ? gpio_cfg_i2c2c : gpio_cfg_i2c2;
 		break;
 	default:
 		return -EINVAL;
@@ -92,6 +96,34 @@ static uint32_t _max_capi_i2c_speed_to_hz(enum capi_i2c_speed speed)
 		/* High-speed and ultra-fast modes are not supported. */
 		return 0;
 	}
+}
+
+/**
+ * @brief Wait for the bus to go idle after an initiator STOP.
+ *
+ * Newer MSDK releases return from MXC_I2C_MasterTransaction() as soon as
+ * MSTCTRL.STOP self-clears, which happens when the STOP condition starts, not
+ * once it is on the bus (v2023_06 waited for INTFL0.STOP instead). Returning
+ * early lets the caller race the target's STOP handling, and makes the next
+ * blocking transfer fail the MSDK's up-front STATUS.BUSY check. Waiting for
+ * BUSY to clear restores the v2023_06 behaviour and is a no-op there.
+ *
+ * The bound is a poll count rather than a time so this does not depend on
+ * CAPI time: each poll takes at least one core cycle, so it allows >= 1 ms.
+ *
+ * @param regs - the I2C instance
+ * @return 0 once idle, -ETIMEDOUT if the bus never went idle
+ */
+static int _max_capi_i2c_wait_bus_idle(mxc_i2c_regs_t *regs)
+{
+	uint32_t polls = SystemCoreClock / 1000U;
+
+	while (regs->status & MXC_F_I2C_STATUS_BUSY) {
+		if (polls-- == 0U)
+			return -ETIMEDOUT;
+	}
+
+	return 0;
 }
 
 /**
@@ -380,16 +412,20 @@ static int max_capi_i2c_init(struct capi_i2c_controller_handle **handle,
 	i2c_priv->initiator = config->initiator;
 	i2c_priv->vssel = MAX_CAPI_GPIO_VSSEL_VDDIO;
 	i2c_priv->use_irq = false;
+	i2c_priv->use_alternate_pins = false;
 
 	if (config->extra) {
 		i2c_extra = config->extra;
 		i2c_priv->vssel = i2c_extra->vssel;
 		i2c_priv->use_irq = i2c_extra->use_irq;
+		i2c_priv->use_alternate_pins = i2c_extra->use_alternate_pins;
 	}
 
 	MXC_I2C_Shutdown(i2c_priv->regs);
 
-	ret = _max_capi_i2c_pins_config(config->identifier, i2c_priv->vssel);
+	ret = _max_capi_i2c_pins_config(config->identifier,
+					i2c_priv->use_alternate_pins,
+					i2c_priv->vssel);
 	if (ret)
 		goto free_handle;
 
@@ -558,7 +594,13 @@ static int max_capi_i2c_transmit(struct capi_i2c_device *device,
 	if (transfer->sub_address_len)
 		capi_free(tx_buf);
 
-	return ret ? -EIO : 0;
+	if (ret)
+		return -EIO;
+
+	if (!transfer->no_stop)
+		return _max_capi_i2c_wait_bus_idle(i2c_priv->regs);
+
+	return 0;
 }
 
 /**
@@ -603,8 +645,13 @@ static int max_capi_i2c_receive(struct capi_i2c_device *device,
 	};
 
 	ret = MXC_I2C_MasterTransaction(&req);
+	if (ret)
+		return -EIO;
 
-	return ret ? -EIO : 0;
+	if (!transfer->no_stop)
+		return _max_capi_i2c_wait_bus_idle(i2c_priv->regs);
+
+	return 0;
 }
 
 /**
@@ -886,7 +933,9 @@ static int max_capi_i2c_register_target(struct capi_i2c_controller_handle
 	 */
 	MXC_I2C_Shutdown(i2c_priv->regs);
 
-	if (_max_capi_i2c_pins_config(i2c_priv->identifier, i2c_priv->vssel))
+	if (_max_capi_i2c_pins_config(i2c_priv->identifier,
+				      i2c_priv->use_alternate_pins,
+				      i2c_priv->vssel))
 		return -EINVAL;
 
 	if (MXC_I2C_RevA_Init((mxc_i2c_reva_regs_t *)i2c_priv->regs, 0, addr)
@@ -928,7 +977,9 @@ static int max_capi_i2c_unregister_target(struct capi_i2c_controller_handle
 	/* See the comment in max_capi_i2c_register_target(). */
 	MXC_I2C_Shutdown(i2c_priv->regs);
 
-	if (_max_capi_i2c_pins_config(i2c_priv->identifier, i2c_priv->vssel))
+	if (_max_capi_i2c_pins_config(i2c_priv->identifier,
+				      i2c_priv->use_alternate_pins,
+				      i2c_priv->vssel))
 		return -EINVAL;
 
 	if (MXC_I2C_RevA_Init((mxc_i2c_reva_regs_t *)i2c_priv->regs, 1, 0)
