@@ -29,6 +29,11 @@ extern int example_main(void);
 
 #define GPIO_IRQ_PIN_MASK	(1U << GPIO_INPUT_IRQ_PIN)
 
+/* Must match the loopback input's vssel, or arming the IRQ re-levels the pad. */
+#ifndef GPIO_INPUT_IRQ_VSSEL
+#define GPIO_INPUT_IRQ_VSSEL	MAX_CAPI_GPIO_VSSEL_VDDIO
+#endif
+
 /**
  * @brief Platform hook: Arm (enable) GPIO IRQ for loopback test.
  * @param irq_line Pointer to store the CAPI IRQ line number.
@@ -46,7 +51,7 @@ int platform_gpio_irq_arm(uint32_t *irq_line)
 		.mask = GPIO_IRQ_PIN_MASK,
 		.func = MXC_GPIO_FUNC_IN,
 		.pad = MXC_GPIO_PAD_NONE,
-		.vssel = MXC_GPIO_VSSEL_VDDIO,
+		.vssel = (mxc_gpio_vssel_t)GPIO_INPUT_IRQ_VSSEL,
 	};
 
 	/* Configure pin as input */

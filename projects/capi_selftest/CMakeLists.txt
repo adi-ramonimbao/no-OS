@@ -49,6 +49,17 @@ target_include_directories(capi_selftest PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common
 )
 
+# Several boards share one SoC (TARGET_NUM), e.g. MAX32690EVKIT and
+# AD-APARD32690-SL, so parameters.h also needs the board to pick its pin map:
+# BOARD=ad-apard32690-sl -> CAPI_SELFTEST_BOARD_AD_APARD32690_SL.
+if(DEFINED BOARD AND NOT BOARD STREQUAL "")
+    string(MAKE_C_IDENTIFIER "${BOARD}" _capi_selftest_board)
+    string(TOUPPER "${_capi_selftest_board}" _capi_selftest_board)
+    target_compile_definitions(capi_selftest PRIVATE
+        CAPI_SELFTEST_BOARD_${_capi_selftest_board}
+    )
+endif()
+
 target_link_libraries(capi_selftest no-os)
 
 # BSP + flash go through the shared cmake/xilinx dispatchers for every platform.

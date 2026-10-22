@@ -139,10 +139,38 @@
 
 #elif (TARGET_NUM == 32690)
 
+#if defined(CAPI_SELFTEST_BOARD_AD_APARD32690_SL)
+
+/*
+ * AD-APARD32690-SL: every header pin is pulled up to / referenced to 3V3, so
+ * all externally wired peripherals run at VDDIOH.
+ */
+#define BOARD_VSSEL		MAX_CAPI_GPIO_VSSEL_VDDIOH
+
+/*
+ * Console: UART0 (P2.11/P2.12) is routed to the P9 SWD programmer's UART
+ * (P50/P55 in position 2-3, JP12/JP13 in position 2-3).
+ */
+#define UART_IDENTIFIER		0U
+#define UART_OPS		&max_capi_uart_ops
+#define UART_EXTRA_TYPE		struct max_capi_uart_extra
+#define UART_EXTRA_INIT		{ .vssel = BOARD_VSSEL, .use_irq = true }
+#define PLATFORM_NAME		"MAX32690 (AD-APARD32690-SL)"
+
+/*
+ * UART loopback runner for test_uart.c (must NOT be the console UART).
+ * AD-APARD32690-SL: use UART1 on Arduino D0 = P2.14 (RX) / D1 = P2.16 (TX)
+ * and strap them together.
+ */
+#define UART_ASYNC_IDENTIFIER	1U
+
+#else /* MAX32690EVKIT */
+
+#define BOARD_VSSEL		MAX_CAPI_GPIO_VSSEL_VDDIO
+
 /* Console: UART2 (P1.9/P1.10) is the one routed to the EVKIT USB-UART bridge. */
 #define UART_IDENTIFIER		2U
 #define UART_OPS		&max_capi_uart_ops
-#define UART_BAUDRATE		115200
 #define UART_EXTRA_TYPE		struct max_capi_uart_extra
 #define UART_EXTRA_INIT		{ .use_irq = true }
 #define PLATFORM_NAME		"MAX32690"
@@ -153,6 +181,11 @@
  * P2.12 also drives LED1, so the LED flickers while the UART group runs.
  */
 #define UART_ASYNC_IDENTIFIER	0U
+
+#endif /* CAPI_SELFTEST_BOARD_AD_APARD32690_SL */
+
+#define UART_BAUDRATE		115200
+
 #define UART_ASYNC_OPS		&max_capi_uart_ops
 #define UART_ASYNC_EXTRA_TYPE	struct max_capi_uart_extra
 #define UART_ASYNC_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIOH, .use_irq = true }
@@ -163,7 +196,10 @@
 #define UART_ASYNC_HAS_RX_TIMEOUT	0
 
 #ifdef CONFIG_CAPI_USB_UART
-/* USB CDC-ACM UART on the MAX32690EVKIT high-speed USB connector */
+/*
+ * USB CDC-ACM UART on the MAX32690 high-speed USB device port: the EVKIT's
+ * USB HS connector, or the AD-APARD32690-SL's P10 USB-C.
+ */
 #define USB_UART_IDENTIFIER	0U	/* ignored: single USB controller */
 #define USB_UART_OPS		&max_capi_usb_uart_ops
 #define USB_UART_EXTRA_TYPE	struct max_capi_usb_uart_extra
@@ -171,34 +207,62 @@
 				  .pid = MAX_CAPI_USB_UART_DEFAULT_PID }
 #endif /* CONFIG_CAPI_USB_UART */
 
-#define GPIO_OUTPUT_IDENTIFIER	0U
-#define GPIO_OUTPUT_NUM_PINS	1U
-#define GPIO_OUTPUT_OPS		&max_capi_gpio_ops
-#define GPIO_OUTPUT_NAME	"P0.9"
-#define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
-#define GPIO_OUTPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_OUT, .pin_offset = 9U }
+#if defined(CAPI_SELFTEST_BOARD_AD_APARD32690_SL)
+
+/*
+ * GPIO loopback pair on AD-APARD32690-SL: Arduino D8 = P1.31 (output) wired to
+ * D9 = P1.30 (input). D4/D5 (P0.8/P0.7) are avoided: P0.8 has a 2.7k pull-up.
+ */
+#define GPIO_OUTPUT_IDENTIFIER	1U
+#define GPIO_OUTPUT_NAME	"P1.31"
+#define GPIO_OUTPUT_PIN_OFFSET	31U
+
+#define GPIO_INPUT_IDENTIFIER	1U
+#define GPIO_INPUT_NAME		"P1.30"
+#define GPIO_INPUT_PIN_OFFSET	30U
+
+#else /* MAX32690EVKIT */
 
 /*
  * GPIO loopback pair on MAX32690EVKIT: P0.9 (output) wired to P0.8 (input).
  * P2.12 is taken by UART0 TX for the UART loopback.
  */
+#define GPIO_OUTPUT_IDENTIFIER	0U
+#define GPIO_OUTPUT_NAME	"P0.9"
+#define GPIO_OUTPUT_PIN_OFFSET	9U
+
 #define GPIO_INPUT_IDENTIFIER	0U
+#define GPIO_INPUT_NAME		"P0.8"
+#define GPIO_INPUT_PIN_OFFSET	8U
+
+#endif /* CAPI_SELFTEST_BOARD_AD_APARD32690_SL */
+
+#define GPIO_OUTPUT_NUM_PINS	1U
+#define GPIO_OUTPUT_OPS		&max_capi_gpio_ops
+#define GPIO_OUTPUT_EXTRA	struct max_capi_gpio_extra_config
+#define GPIO_OUTPUT_EXTRA_INIT	{ .vssel = BOARD_VSSEL, \
+				  .func = MAX_CAPI_GPIO_FUNC_OUT, \
+				  .pin_offset = GPIO_OUTPUT_PIN_OFFSET }
+
 #define GPIO_INPUT_NUM_PINS	1U
 #define GPIO_INPUT_OPS		&max_capi_gpio_ops
-#define GPIO_INPUT_NAME		"P0.8"
 #define GPIO_INPUT_EXTRA	struct max_capi_gpio_extra_config
-#define GPIO_INPUT_EXTRA_INIT	{ .func = MAX_CAPI_GPIO_FUNC_IN, .pin_offset = 8U }
+#define GPIO_INPUT_EXTRA_INIT	{ .vssel = BOARD_VSSEL, \
+				  .func = MAX_CAPI_GPIO_FUNC_IN, \
+				  .pin_offset = GPIO_INPUT_PIN_OFFSET }
 
 /*
- * Output and input share port 0, but each handle covers a single pin via
- * pin_offset and writes are masked, so port-wide writes only touch P0.9.
+ * Output and input share a port, but each handle covers a single pin via
+ * pin_offset and writes are masked, so port-wide writes only touch the
+ * output pin.
  */
 #define GPIO_HAS_PORT_LOOPBACK	1
 #define GPIO_HAS_PIN_LOOPBACK	1
 
 #define GPIO_OUTPUT_PIN_NUMBERS	{ 0 }
 #define GPIO_INPUT_PIN_NUMBERS	{ 0 }
-#define GPIO_INPUT_IRQ_PIN	8U
+#define GPIO_INPUT_IRQ_PIN	GPIO_INPUT_PIN_OFFSET
+#define GPIO_INPUT_IRQ_VSSEL	BOARD_VSSEL
 
 /*
  * SPI async delivery mode. SPI_HAS_IRQ and SPI_HAS_DMA are mutually exclusive:
@@ -211,7 +275,7 @@
 #define IRQ_CTRL_IDENTIFIER	0U
 
 /**
- * SPI0 on MAX32690EVKIT:
+ * SPI0 on MAX32690EVKIT / AD-APARD32690-SL (P4 COM0 header):
  * 	P2.29 = SCK, P2.27 = MISO, P2.28 = MOSI, P0.22 = SS0
  * 	External loopback requires P2.27 physically wired to P2.28.
  */
@@ -223,6 +287,7 @@
 				  .num_targets = 1, \
 				  .polarity_mask = 0b111, \
 				  .chip_select = MAX_CAPI_SPI_CS0, \
+				  .vssel = BOARD_VSSEL, \
 				  .clock_phase = MAX_CAPI_SPI_CLOCK_PHASE_0, \
 				  .clock_polarity = MAX_CAPI_SPI_CLOCK_POLARITY_0, \
 				  .use_irq = true }
@@ -233,7 +298,7 @@
 #define SPI_DEVICE_SPEED_HZ	100000
 
 /**
- * TMR0 on MAX32690EVKIT: 32-bit general purpose timer.
+ * TMR0 on MAX32690: 32-bit general purpose timer.
  *
  * Clocked straight from PCLK (60 MHz with the default 120 MHz core) at
  * prescaler 1. At 1 MHz the prescaler rounds to /64 and one tick spans ~128
@@ -261,6 +326,23 @@
 #define TIMER_HAS_IRQ			1
 #define TIMER_HAS_COMPARE		1
 
+#if defined(CAPI_SELFTEST_BOARD_AD_APARD32690_SL)
+
+/**
+ * I2C initiator/target loopback on AD-APARD32690-SL:
+ * 	Initiator = I2C0 on P7 COM1 (pin 1 = P2.7 SDA, pin 2 = P2.8 SCL)
+ * 	Target    = I2C1 on the Arduino SDA/SCL (P2.17/P2.18), its alternate
+ * 		    pin set; the 10k pull-ups to IOREF there hold the bus up.
+ */
+#define I2C_IDENTIFIER		0U
+#define I2C_EXTRA_INIT		{ .vssel = BOARD_VSSEL, .use_irq = true }
+
+#define I2C_TARGET_IDENTIFIER	1U
+#define I2C_TARGET_EXTRA_INIT	{ .vssel = BOARD_VSSEL, .use_irq = true, \
+				  .use_alternate_pins = true }
+
+#else /* MAX32690EVKIT */
+
 /**
  * I2C initiator/target loopback on MAX32690EVKIT:
  * 	Initiator = I2C0 (P2.7, P2.8)
@@ -271,16 +353,20 @@
  * bus needs to move to VDDIOH later.
  */
 #define I2C_IDENTIFIER		0U
+#define I2C_EXTRA_INIT		{ .vssel = BOARD_VSSEL, .use_irq = true }
+
+#define I2C_TARGET_IDENTIFIER	2U
+#define I2C_TARGET_EXTRA_INIT	{ .vssel = BOARD_VSSEL, .use_irq = true }
+
+#endif /* CAPI_SELFTEST_BOARD_AD_APARD32690_SL */
+
 #define I2C_OPS			&max_capi_i2c_ops
 #define I2C_EXTRA_TYPE		struct max_capi_i2c_extra
-#define I2C_EXTRA_INIT		{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIO, .use_irq = true }
 #define I2C_TARGET_ADDR		0x42
 #define I2C_HAS_IRQ		1
 
-#define I2C_TARGET_IDENTIFIER	2U
 #define I2C_TARGET_OPS		&max_capi_i2c_ops
 #define I2C_TARGET_EXTRA_TYPE	struct max_capi_i2c_extra
-#define I2C_TARGET_EXTRA_INIT	{ .vssel = MAX_CAPI_GPIO_VSSEL_VDDIO, .use_irq = true }
 
 #define I2C_TARGET_HAS_IRQ	1
 
@@ -296,7 +382,7 @@
 #define I2C_PLATFORM_SET_TARGET(h)	((void)(h))
 
 /**
- * DMA on MAX32690EVKIT: single controller, 16 channels, memory-to-memory.
+ * DMA on MAX32690: single controller, 16 channels, memory-to-memory.
  */
 #define DMA_OPS			&max_capi_dma_ops
 #define DMA_IDENTIFIER		0U

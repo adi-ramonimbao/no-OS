@@ -33,13 +33,15 @@ The project ships three examples, selected by ``PROJECT_DEFCONFIG``:
   Runs the test framework over a USB CDC-ACM virtual serial port instead of
   the console UART, exercising the CAPI USB UART backend
   (``CONFIG_CAPI_USB_UART``). Only on platforms that provide one - currently
-  the MAX32690.
+  the MAX32690 (MAX32690EVKIT and AD-APARD32690-SL).
 
 All examples share ``src/common`` (the test framework and ``common_data``) and
 a per-platform ``src/platform/<plat>/`` directory that supplies ``main.c`` and
 ``parameters.h``. ``parameters.h`` is the only file that knows the board: it
 maps each peripheral to a CAPI backend and publishes the capability macros the
-tests gate on.
+tests gate on. Where several boards share one SoC, it keys on
+``CAPI_SELFTEST_BOARD_<BOARD>``, which ``CMakeLists.txt`` derives from the
+preset's ``BOARD`` (e.g. ``CAPI_SELFTEST_BOARD_AD_APARD32690_SL``).
 
 What gets tested
 ----------------
@@ -371,6 +373,56 @@ open the port, then prints the report on it. ``RECEIVE_ASYNC`` prompts for
 four characters and echoes them back; it reports a ``BOARD_STATE`` skip if
 nothing is typed within 30 s. The baud rate shown by ``GET_LINE_CONFIG`` is
 whatever the terminal requested - it has no effect on a USB link.
+
+Wiring - MAX32690 (AD-APARD32690-SL)
+------------------------------------
+
+Same SoC and groups as the MAX32690EVKIT, remapped onto the APARD's Arduino,
+P4 COM0 and P7 COM1 headers. All header I/O is at 3.3 V (VDDIOH). Build with
+the ``ad-apard32690-sl`` preset:
+
+.. code-block:: bash
+
+	cmake -B build-apard --preset ad-apard32690-sl \
+	    -DPROJECT_DEFCONFIG=capi_selftest/loopback.conf
+	cmake --build build-apard --target capi_selftest -j$(nproc)
+	cmake --build build-apard --target flash
+
+.. list-table::
+	:header-rows: 1
+	:widths: 16 26 58
+
+	* - Group
+	  - Peripheral
+	  - Strap / notes
+	* - GPIO
+	  - P1.31 -> P1.30
+	  - Jumper Arduino D8 (P1.31, output) to D9 (P1.30, input), both on P5.
+	    Port and pin loopback both run; P1.30 is also armed as the IRQ
+	    source. D4/D5 are avoided because P0.8 has a 2.7k pull-up.
+	* - SPI
+	  - SPI0
+	  - On P4 COM0, jumper pin 3 (P2.27, MISO) to pin 4 (P2.28, MOSI); pin 2
+	    (P2.29) is SCK and pin 5 (P0.22) is SS0, driven not strapped. DMA
+	    delivery.
+	* - I2C
+	  - I2C0 <-> I2C1
+	  - Jumper P7 COM1 pin 1 (P2.7, SDA) to Arduino SDA (P2.17), and P7 COM1
+	    pin 2 (P2.8, SCL) to Arduino SCL (P2.18). I2C0 is the initiator, I2C1
+	    (alternate pin set) the target; the board's 10k pull-ups on the
+	    Arduino SCL/SDA hold the bus up.
+	* - UART
+	  - UART1
+	  - Jumper Arduino D0 (P2.14, RX) to D1 (P2.16, TX), both on P6.
+	* - IRQ / Timer / DMA
+	  - NVIC / TMR0 / DMA
+	  - No strap. IRQ reuses the P1.30 GPIO edge; TMR0 and DMA as on the
+	    MAX32690EVKIT.
+
+Console is UART0 (P2.11/P2.12) on the P9 SWD programmer's USB-UART: set P50
+and P55 to position 2-3 (programmer to MAX32690) and JP12/JP13 to position 2-3
+(normal UART0). The ``basic`` and ``usb_uart`` examples build with the same
+preset; ``usb_uart`` enumerates on the P10 USB-C connector.
 
 Wiring - MAX32655 (MAX32655FTHR)
 --------------------------------
