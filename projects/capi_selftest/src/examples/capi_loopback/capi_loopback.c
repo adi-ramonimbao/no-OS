@@ -20,6 +20,7 @@
 #include "tests/test_i2c.h"
 #include "tests/test_uart.h"
 #include "tests/test_dma.h"
+#include "tests/test_rtc.h"
 /**
  * @brief Common function signature for a top-level test group.
  */
@@ -52,6 +53,7 @@ static const struct test_entry tests[] = {
 	{ 0, "I2C", test_i2c, false },
 	{ 0, "UART", test_uart, false },
 	{ 0, "DMA", test_dma, false },
+	{ 0, "RTC", test_rtc, false },
 };
 
 #define NUM_TESTS	(sizeof(tests) / sizeof(tests[0]))

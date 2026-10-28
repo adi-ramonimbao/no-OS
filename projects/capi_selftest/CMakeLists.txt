@@ -31,6 +31,7 @@ if(CONFIG_CAPI_SELFTEST_LOOPBACK_EXAMPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/capi_loopback/tests/test_i2c.c
         ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/capi_loopback/tests/test_uart.c
         ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/capi_loopback/tests/test_dma.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/capi_loopback/tests/test_rtc.c
     )
     target_include_directories(capi_selftest PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/examples/capi_loopback

@@ -245,9 +245,19 @@ void test_framework_info(const char *message)
 
 void test_framework_value(const char *name, uint64_t value)
 {
-	test_framework_print("[VAL:%s.%s.%s] 0x%llX\r\n", current_module,
-			     current_name, name != NULL ? name : "",
-			     (unsigned long long)value);
+	unsigned long hi = (unsigned long)(value >> 32);
+	unsigned long lo = (unsigned long)(value & 0xFFFFFFFFUL);
+
+	if (name == NULL)
+		name = "";
+
+	/* newlib-nano printf has no %ll support; print as 32-bit halves. */
+	if (hi != 0)
+		test_framework_print("[VAL:%s.%s.%s] 0x%lX%08lX\r\n",
+				     current_module, current_name, name, hi, lo);
+	else
+		test_framework_print("[VAL:%s.%s.%s] 0x%lX\r\n",
+				     current_module, current_name, name, lo);
 }
 
 void test_framework_section(const char *name)

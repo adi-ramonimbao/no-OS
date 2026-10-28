@@ -128,4 +128,69 @@
 /** IRQ */
 #define IRQ_CTRL_EXTRA		&(struct max_capi_irq_extra_config) {}
 
+/**
+ * RTC on MAX32657EVKIT. The EVKIT may ship without the 32.768 kHz crystal, so
+ * the 32 kHz domain is switched to INRO/4 (~32.75 kHz, uncalibrated) before
+ * the RTC tests run. Timing checks in test_rtc.c are deliberately loose.
+ */
+#ifdef CONFIG_CAPI_RTC
+#include "mxc_sys.h"
+#include "max32657.h"
+#include "rtc.h"
+#include "maxim_capi_rtc.h"
+#include "maxim_capi_rtc_priv.h"
+
+#define RTC_OPS			&max_capi_rtc_ops
+#define RTC_IDENTIFIER		0U
+#define RTC_BAD_IDENTIFIER	1U
+#define RTC_PLATFORM_INIT()	MXC_SYS_Select32KClockSource(MXC_SYS_32K_CLOCK_INRO)
+#define RTC_STATIC_HANDLE()	CAPI_RTC_HANDLE_MAXIM_INIT()
+
+/* The SEC register is the counter: 1 Hz is the only tick rate. */
+#define RTC_TICK_FREQ_HZ	MAX_CAPI_RTC_TICK_FREQ_HZ
+#define RTC_BAD_TICK_FREQ_HZ	32768U
+
+/* No tick interrupt: the TICK event is rejected with -ENOTSUP. */
+#define RTC_HAS_TICK_IRQ	0
+
+/* Trim is applied in whole ppm, -128..+127 ppm. */
+#define RTC_HAS_CALIBRATION	1
+#define RTC_CAL_STEP_PPB	1000
+#define RTC_CAL_MIN_PPB		(-128000)
+#define RTC_CAL_MAX_PPB		127000
+
+/*
+ * Alarms are programmed through struct max_capi_rtc_alarm_extra; the
+ * calendar time/mask fields are ignored. TOD is the one-shot alarm (value =
+ * absolute seconds count), SSEC the periodic one (value = 1/4096 s ticks).
+ */
+#define RTC_NUM_ALARMS			MAX_CAPI_RTC_NUM_ALARMS
+#define RTC_ALARM_ID			MAX_CAPI_RTC_ALARM_TOD
+#define RTC_ALARM_EXTRA_TYPE		struct max_capi_rtc_alarm_extra
+#define RTC_ALARM_SET(cfg, extra, val)	((extra).value = (val))
+#define RTC_ALARM_VALUE(cfg, extra)	((extra).value)
+#define RTC_ALARM_ENABLED(cfg, extra)	((extra).enabled)
+#define RTC_ALARM_REQUIRES_EXTRA	1
+#define RTC_ALARM_EVENT_EXTRA_IS_ID	1
+
+#define RTC_HAS_PERIODIC_ALARM		1
+#define RTC_PERIODIC_ALARM_ID		MAX_CAPI_RTC_ALARM_SSEC
+#define RTC_PERIODIC_ALARM_PERIOD_MS	100U
+#define RTC_PERIODIC_ALARM_VALUE	(MAX_CAPI_RTC_SSEC_FREQ_HZ * \
+					 RTC_PERIODIC_ALARM_PERIOD_MS / 1000U)
+
+/* SEC/SSEC READY interrupt. */
+#define RTC_HAS_PLATFORM_EVENT	1
+#define RTC_PLATFORM_EVENT	MAX_CAPI_RTC_EVENT_READY
+
+/* Square-wave output on P0.13, driven only while the counter runs. */
+#define RTC_HAS_OUTPUT			1
+#define RTC_OUTPUT_EXTRA_TYPE		struct max_capi_rtc_extra
+#define RTC_OUTPUT_EXTRA_INIT		{ .sqwave = MAX_CAPI_RTC_SQWAVE_1HZ }
+#define RTC_OUTPUT_EXTRA_BAD_INIT	{ .sqwave = (enum max_capi_rtc_sqwave_freq)99 }
+#define RTC_OUTPUT_IS_ON()		((MXC_RTC->ctrl & MXC_F_RTC_CTRL_SQW_EN) != 0U)
+/* E_NO_ERROR is 0. */
+#define RTC_RAW_START()			MXC_RTC_Start()
+#endif /* CONFIG_CAPI_RTC */
+
 #endif /* __PARAMETERS_H__ */
