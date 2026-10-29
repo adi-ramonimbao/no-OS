@@ -169,4 +169,5 @@ source "projects/eval-ad5933ardz/Kconfig"
 source "projects/trustzone_hello/Kconfig"
 source "projects/trustzone_selftest/Kconfig"
 source "projects/trustzone_secure_only/Kconfig"
+source "projects/trustzone_nonsecure_only/Kconfig"
 endmenu
