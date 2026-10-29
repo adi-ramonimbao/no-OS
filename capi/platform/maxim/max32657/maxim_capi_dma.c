@@ -18,6 +18,24 @@
 #include "maxim_capi_irq.h"
 #include "capi_irq.h"
 
+/*
+ * DMA instance selection. The MAX32657 has two DMA controllers whose security
+ * attribution is hardwired and NOT configurable through the SPC (see
+ * max32657.h): DMA1 (MXC_DMA1_S) is fixed Secure, DMA0 (MXC_DMA0_NS) is fixed
+ * Non-Secure. The Secure world (a single-image build or the Secure half of a
+ * TrustZone build) therefore drives DMA1, while the Non-Secure world can only
+ * reach DMA0 -- DMA1 is inaccessible to it and touching it would fault. Pick
+ * the reachable controller and its clock gate from CONFIG_TRUSTED_EXECUTION_
+ * SECURE, which the build sets per world (see max32657/memory_layout.cmake).
+ */
+#if (CONFIG_TRUSTED_EXECUTION_SECURE == 1)
+#define MAX_CAPI_DMA_INSTANCE	MXC_DMA1_S
+#define MAX_CAPI_DMA_CLOCK	MXC_SYS_PERIPH_CLOCK_DMA1
+#else
+#define MAX_CAPI_DMA_INSTANCE	MXC_DMA0_NS
+#define MAX_CAPI_DMA_CLOCK	MXC_SYS_PERIPH_CLOCK_DMA0
+#endif
+
 static struct capi_dma_handle *dma;
 
 /** Forward declaration *******************************************************/
@@ -116,7 +134,7 @@ static int max_capi_dma_init(struct capi_dma_handle **handle,
 		goto free_handle;
 	}
 
-	ret = MXC_DMA_Init(MXC_DMA1_S);
+	ret = MXC_DMA_Init(MAX_CAPI_DMA_INSTANCE);
 	if (ret != E_NO_ERROR) {
 		ret = -EIO;
 		goto free_channels;
@@ -162,14 +180,14 @@ static int max_capi_dma_deinit(struct capi_dma_handle *handle)
 
 	dma_priv = handle->priv;
 
-	MXC_DMA_DeInit(MXC_DMA1_S);
-	MXC_SYS_ClockDisable(MXC_SYS_PERIPH_CLOCK_DMA1);
+	MXC_DMA_DeInit(MAX_CAPI_DMA_INSTANCE);
+	MXC_SYS_ClockDisable(MAX_CAPI_DMA_CLOCK);
 
-	MXC_DMA1_S->inten &= ~((1 << MXC_DMA_CHANNELS) - 1);
+	MAX_CAPI_DMA_INSTANCE->inten &= ~((1 << MXC_DMA_CHANNELS) - 1);
 
 	if (dma_priv->use_irq) {
 		for (i = 0; i < MXC_DMA_CHANNELS; i++) {
-			irq = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, i);
+			irq = MXC_DMA_CH_GET_IRQ(MAX_CAPI_DMA_INSTANCE, i);
 			capi_irq_disable(irq);
 		}
 	}
@@ -222,7 +240,7 @@ static int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 		chan->owned_by_app = true;
 	}
 
-	hw_id = MXC_DMA_AcquireChannel(MXC_DMA1_S);
+	hw_id = MXC_DMA_AcquireChannel(MAX_CAPI_DMA_INSTANCE);
 	if (hw_id < 0) {
 		ret = -EBUSY;
 		goto free_channel;
@@ -237,7 +255,7 @@ static int max_capi_dma_init_chan(struct capi_dma_handle *handle,
 	ch_priv->completed = true; /* An idle channel reports completed */
 	chan->handle = handle;
 	chan->id = id; /* User-assigned */
-	chan->irq_num = MXC_DMA_CH_GET_IRQ(MXC_DMA1_S, hw_id);
+	chan->irq_num = MXC_DMA_CH_GET_IRQ(MAX_CAPI_DMA_INSTANCE, hw_id);
 	chan->extra = ch_priv;
 
 	if (dma_priv->use_irq) {
@@ -381,7 +399,7 @@ static int max_capi_dma_config_xfer(struct capi_dma_chan *chan,
 	 * channel. We have to call MXC_DMA_ChannelEnableInt again to add the
 	 * MXC_F_DMA_CTRL_CTZ_IE flag.
 	 */
-	MXC_DMA_EnableInt(MXC_DMA1_S, ch_priv->hw_channel_id);
+	MXC_DMA_EnableInt(MAX_CAPI_DMA_INSTANCE, ch_priv->hw_channel_id);
 	MXC_DMA_ChannelEnableInt(ch_priv->hw_channel_id, MXC_F_DMA_CTRL_CTZ_IE);
 
 	chan->xfer = xfer;
@@ -477,7 +495,7 @@ static int max_capi_dma_isr(struct capi_dma_handle *handle)
 		return -EINVAL;
 
 	/* Call MSDK DMA interrupt handler for the controller */
-	MXC_DMA_Handler(MXC_DMA1_S);
+	MXC_DMA_Handler(MAX_CAPI_DMA_INSTANCE);
 
 	return 0;
 }
