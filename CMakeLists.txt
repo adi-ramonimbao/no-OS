@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.27)
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/maxim"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/libraries"
 )
 
@@ -112,6 +113,21 @@ if(NATIVE_BUILD AND DEFINED PROJECT_DEFCONFIG)
             message(STATUS "CAPI build: using ${NO_OS_TOOLCHAIN_PATH}")
         endif()
     endif()
+endif()
+
+# A project can declare that it must build in the Secure TrustZone world by
+# shipping projects/<name>/trustzone.cmake. Include it here -- before the
+# toolchain file is processed at project() -- so it can set MSECURITY_MODE in the
+# cache and the plain board preset works without a -DMSECURITY_MODE flag.
+# Guarded by NOT DEFINED so the nested Non-Secure build (configured with
+# -DMSECURITY_MODE=NONSECURE) and any explicit override are left untouched.
+if(NATIVE_BUILD AND DEFINED NO_OS_PROJECT_NAME AND NOT DEFINED MSECURITY_MODE)
+    set(_tz_marker "${CMAKE_SOURCE_DIR}/projects/${NO_OS_PROJECT_NAME}/trustzone.cmake")
+    if(EXISTS "${_tz_marker}")
+        message(STATUS "TrustZone project '${NO_OS_PROJECT_NAME}': applying ${_tz_marker}")
+        include("${_tz_marker}")
+    endif()
+    unset(_tz_marker)
 endif()
 
 # Set toolchain file if not already set
