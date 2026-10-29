@@ -166,4 +166,5 @@ source "projects/hello_world/Kconfig"
 source "projects/capi_selftest/Kconfig"
 source "projects/eval-powrms/Kconfig"
 source "projects/eval-ad5933ardz/Kconfig"
+source "projects/trustzone_hello/Kconfig"
 endmenu
