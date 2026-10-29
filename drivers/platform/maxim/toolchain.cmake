@@ -73,6 +73,14 @@ else()
     set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
 endif()
 
+# BFD target and architecture for `objcopy -I binary` (see
+# cmake/FirmwareBlob.cmake). Every Maxim part is a little-endian Arm core.
+# Cached so they cross out of the toolchain file's scope into the main project.
+set(NO_OS_OBJCOPY_BIN_FORMAT elf32-littlearm CACHE INTERNAL
+    "objcopy -O target for binary blobs embedded in the ELF")
+set(NO_OS_OBJCOPY_BIN_ARCH arm CACHE INTERNAL
+    "objcopy -B architecture for binary blobs embedded in the ELF")
+
 set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_C ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_CXX ".elf")
