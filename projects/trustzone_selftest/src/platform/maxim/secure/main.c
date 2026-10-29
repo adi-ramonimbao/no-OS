@@ -1,0 +1,131 @@
+/*
+ * Copyright 2026(c) Analog Devices, Inc.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/**
+ * @file   main.c
+ * @brief  Secure-world entry for the MAX32657 TrustZone CAPI self-test.
+ *
+ * The Secure world:
+ *   1. brings up the console UART through CAPI and prints a banner,
+ *   2. exposes the flash code region as Non-Secure Callable so the secure
+ *      gateway veneers are reachable from the Non-Secure world,
+ *   3. hands the console UART, GPIO0 (all pins), SPI, I3C ("I2C") and TMR0 - and
+ *      their interrupt lines - to the Non-Secure world via the SPC and NVIC,
+ *   4. branches into the Non-Secure image with NonSecure_Init().
+ *
+ * Two secure gateways back the Non-Secure TRUSTZONE test group; they are
+ * defined in src/examples/selftest/selftest_secure.c, which uses no platform
+ * header and is reused unchanged by any platform's Secure world:
+ *
+ *   IncrementCount_S()  - validates the caller-supplied pointer with the CMSE
+ *                         intrinsic before dereferencing it, then increments the
+ *                         Non-Secure counter. A NULL or Secure-memory pointer
+ *                         fails the check and returns -EINVAL, so a hostile
+ *                         Non-Secure pointer can never reach Secure memory.
+ *   GetSecureMagic_S()  - returns a Secure-owned constant, exercising the
+ *                         Secure -> Non-Secure return path (no pointer involved).
+ */
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "mxc.h"
+#include "spc.h"
+#include "system_max32657.h"
+
+#include "capi_uart.h"
+#include "maxim_capi_uart.h"
+
+#include "parameters.h"
+
+static struct capi_uart_line_config uart_line_config = {
+	.baudrate = UART_BAUDRATE,
+	.size = CAPI_UART_DATA_BITS_8,
+	.parity = CAPI_UART_PARITY_NONE,
+	.stop_bits = CAPI_UART_STOP_1_BIT,
+};
+
+static UART_EXTRA_TYPE uart_extra = UART_EXTRA_INIT;
+
+static const struct capi_uart_config uart_config = {
+	.line_config = &uart_line_config,
+	.extra = &uart_extra,
+	.ops = UART_OPS,
+};
+
+int main(void)
+{
+	struct capi_uart_handle *uart = NULL;
+	bool tx_complete = false;
+	int ret;
+
+	ret = capi_uart_init(&uart, &uart_config);
+	if (ret)
+		return ret;
+
+	/* Route printf/stdio through the CAPI UART for the Secure banner. */
+	max_capi_uart_stdio_enable(uart);
+
+	printf("\n\r**** MAX32657 TrustZone CAPI self-test (Secure world) ****\n\r");
+	printf("Handing peripherals to the Non-Secure world; tests run there.\n\r");
+
+	/* Let the UART finish transmitting before handing it to the Non-Secure
+	 * world. CAPI equivalent of polling the hardware TX-busy flag:
+	 * irq_tx_complete reports true once the TX FIFO is empty and the shift
+	 * register is idle. */
+	do {
+		ret = capi_uart_irq_tx_complete(uart, &tx_complete);
+	} while (!ret && !tx_complete);
+
+	/* Expose the flash code region as Non-Secure Callable so the gateway
+	 * veneers can be called from Non-Secure code. */
+	MXC_SPC_SetCode_NSC(true);
+
+	/* Hand the peripherals the Non-Secure self-test drives over to it, plus
+	 * every GPIO0 pin (the loopback / alternate-function pins live on P0).
+	 * DMA0 is hardwired Non-Secure and needs no handover; it needs its clock,
+	 * reachable once GCR is Non-Secure, and its channel interrupts targeted
+	 * below. The MAX32657 "I2C" CAPI backend drives the I3C block. */
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GCR);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_GPIO0);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_UART);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_SPI);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_I3C);
+	MXC_SPC_SetNonSecure(MXC_SPC_PERIPH_TMR0);
+	/* Despite the name, SPC_GPIO0 is NOT a per-pin ownership register - GPIO0
+	 * ownership is the PERIPH_GPIO0 call above. SPC_GPIO0 is a per-pin
+	 * GPIO0_IN "Read Disable" mask (set = IN always reads 0, to Secure and
+	 * Non-Secure alike; INEN/INTEN/interrupts are unaffected). So this must
+	 * be CLEARED (SetSecure) for the delegated pins, not set, or Non-Secure
+	 * gets a live GPIO0 but can never read GPIO0_IN. Only bits [13:0]
+	 * (MXC_F_SPC_GPIO0_PINS) are defined; a blanket 0xFFFFFFFF also touches
+	 * undocumented upper bits in this register. */
+	MXC_SPC_GPIO_SetSecure(MXC_GPIO0, MXC_F_SPC_GPIO0_PINS);
+
+	/* Target the peripheral interrupt lines the Non-Secure world uses at the
+	 * Non-Secure state; they default to Secure, so an un-targeted line would
+	 * be taken by the (absent) Secure handler instead of the Non-Secure one. */
+	NVIC_SetTargetState(UART_IRQn);
+	NVIC_SetTargetState(SPI_IRQn);
+	NVIC_SetTargetState(TMR0_IRQn);
+	NVIC_SetTargetState(I3C_IRQn);
+	NVIC_SetTargetState(GPIO0_IRQn);
+	NVIC_SetTargetState(DMA0_CH0_IRQn);
+	NVIC_SetTargetState(DMA0_CH1_IRQn);
+	NVIC_SetTargetState(DMA0_CH2_IRQn);
+	NVIC_SetTargetState(DMA0_CH3_IRQn);
+
+	/* Branch into the Non-Secure image (weak impl in system_max32657.c). */
+	ret = NonSecure_Init();
+
+	/* Should never return. Reclaim the UART only to report the failure. */
+	MXC_SPC_SetSecure(MXC_SPC_PERIPH_UART);
+	printf("[Error] Non-Secure transition failed. Error Code: %d\n\r", ret);
+
+	while (1)
+		;
+}
