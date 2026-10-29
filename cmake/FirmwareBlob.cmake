@@ -39,6 +39,11 @@
 # build restages and relinks, while the driver keeps referring to the same three
 # symbols.
 #
+# SOURCE may also be produced at build time, as the OUTPUT of an
+# add_custom_command() in the same directory (e.g. an image linked by a nested
+# build).  CMake marks such a file GENERATED, so it is exempt from the
+# configure-time existence check, and the staging step's DEPENDS orders it.
+#
 # Unlike the Make build this replaces, which globbed every *.bin under SRC_DIRS,
 # blobs are registered explicitly -- consistent with how the rest of the CMake
 # port handled Make's recursive globbing (see the FLAG comments in
@@ -61,7 +66,11 @@ function(no_os_add_firmware_blob TARGET_NAME)
             "no_os_add_firmware_blob(${TARGET_NAME}): unexpected argument(s) "
             "'${FW_UNPARSED_ARGUMENTS}'.")
     endif()
-    if(NOT EXISTS "${FW_SOURCE}")
+    # A GENERATED SOURCE only appears at build time, so it cannot be checked
+    # here; a missing one still fails, as a missing dependency of the staging
+    # step.
+    get_source_file_property(_generated "${FW_SOURCE}" GENERATED)
+    if(NOT _generated AND NOT EXISTS "${FW_SOURCE}")
         message(FATAL_ERROR
             "no_os_add_firmware_blob(${TARGET_NAME}): SOURCE does not exist: "
             "${FW_SOURCE}")
