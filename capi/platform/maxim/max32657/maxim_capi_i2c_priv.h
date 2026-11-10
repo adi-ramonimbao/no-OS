@@ -18,10 +18,30 @@ extern "C" {
 #endif /* __cplusplus */
 
 #define MAX_CAPI_I2C_TARGET_RX_BUFFER_SIZE	256
-#define MAX_CAPI_I2C_FIFO_DEPTH			32
+/** TX and RX FIFO depth (TARG_CAP1.fifotx = fiforx = 0b10) */
+#define MAX_CAPI_I2C_FIFO_DEPTH			8U
 
-#define MAX_CAPI_I2C_DMA_TIMEOUT			1000
 #define MAX_CAPI_I2C_DMA_CALLBACK_CLEANUP_TIMEOUT	10000
+
+/** Longest read that the 8-bit CONT_CTRL1.term_rd count can end */
+#define MAX_CAPI_I2C_TERM_RD_MAX		255U
+/**
+ * Bytes the controller still clocks in after term_rd = 1 is written while it
+ * holds SCL on a full receive FIFO: the byte it then NACKs.
+ */
+#define MAX_CAPI_I2C_TERM_TAIL			1U
+/** Bus bit times a blocking transfer may go without progress */
+#define MAX_CAPI_I2C_IDLE_BITS			256U
+/** Bus bit times a transfer may go without progress in interrupt context */
+#define MAX_CAPI_I2C_IRQ_IDLE_BITS		32U
+
+/** I3C pins, in gpio_cfg_i3c: P0.0 is SCL, P0.1 is SDA */
+#define MAX_CAPI_I2C_SCL_PIN			MXC_GPIO_PIN_0
+#define MAX_CAPI_I2C_SDA_PIN			MXC_GPIO_PIN_1
+/** Clock pulses a bus clear may take: a byte and its acknowledge */
+#define MAX_CAPI_I2C_CLEAR_PULSES		9U
+/** Half period of a bus clear clock, in microseconds (standard mode) */
+#define MAX_CAPI_I2C_CLEAR_HALF_US		5U
 
 /**
  * @enum max_capi_i2c_target_state_enum
@@ -70,10 +90,14 @@ enum max_capi_i2c_async_state_enum {
 	MAX_CAPI_I2C_ASYNC_STATE_IDLE,
 	/** Transmitting sub-address */
 	MAX_CAPI_I2C_ASYNC_STATE_TX_SUBADDR,
+	/** Sub-address queued; waiting for it to go out before the read */
+	MAX_CAPI_I2C_ASYNC_STATE_WAIT_SUBADDR_DONE,
 	/** Transmitting data */
 	MAX_CAPI_I2C_ASYNC_STATE_TX_DATA,
 	/** Receiving data */
 	MAX_CAPI_I2C_ASYNC_STATE_RX_DATA,
+	/** Long read: waiting for a full receive FIFO to write term_rd = 1 */
+	MAX_CAPI_I2C_ASYNC_STATE_RX_TERM,
 	/** Waiting for transaction completion */
 	MAX_CAPI_I2C_ASYNC_STATE_WAIT_DONE,
 	/** Error occurred */
@@ -101,6 +125,12 @@ struct max_capi_i2c_async_state {
 	uint16_t data_len;
 	/** Data read/write index */
 	uint16_t data_idx;
+	/**
+	 * Bytes to receive before the read is ended: data_len for a read
+	 * that term_rd ends, fewer for a longer read whose last bytes stay
+	 * in the receive FIFO until term_rd = 1 is written
+	 */
+	uint16_t rx_limit;
 	/** Send STOP condition */
 	bool send_stop;
 	/** Operation result (0 on success, negative error code otherwise) */
@@ -149,6 +179,11 @@ struct max_capi_i2c_priv {
 	struct capi_dma_chan *dma_channel_rx;
 	/** Async transfer flag */
 	volatile bool async_transfer_in_progress;
+	/**
+	 * A transfer timed out partway through a message: a target can still be
+	 * in the middle of a byte while the bus looks idle
+	 */
+	volatile bool recover_pending;
 	/** Whether to enable IRQ connection during init */
 	bool use_irq;
 
